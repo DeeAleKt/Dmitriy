@@ -83,12 +83,57 @@ async function buildDemo() {
   console.log(`  демо: ../docs/demo/index.html, dist/demo-artifact.html (${Math.round(body.length / 1024)} КБ)`);
 }
 
+// Офлайн-калькулятор: окремий застосунок одним HTML-файлом, без сервера і зовнішніх запитів.
+async function buildCalc() {
+  const result = await esbuild.build({
+    entryPoints: [join(root, 'src/calc/main.jsx')],
+    outdir: join(root, 'dist/calc'),
+    bundle: true,
+    minify: true,
+    format: 'esm',
+    target: ['es2020'],
+    jsx: 'automatic',
+    jsxImportSource: 'preact',
+    legalComments: 'eof',
+    charset: 'utf8',
+    write: false,
+    logLevel: 'warning',
+  });
+  const pick = (ext) => result.outputFiles.find((f) => f.path.endsWith(ext)).text;
+  const js = pick('.js').replaceAll('</script', '<\\/script');
+  const css = pick('.css');
+  const body =
+    '<title>Калькулятор норми</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n' +
+    `<style>${css}</style>\n<div id="app"></div>\n<script type="module">${js}</script>\n`;
+  mkdirSync(join(root, 'dist'), { recursive: true });
+  writeFileSync(join(root, 'dist/calc-artifact.html'), body);
+  mkdirSync(join(out, 'calc'), { recursive: true });
+  writeFileSync(
+    join(out, 'calc/index.html'),
+    '<!doctype html>\n<html lang="uk">\n<head>\n<meta charset="utf-8">\n' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
+      '<meta name="robots" content="noindex, nofollow">\n' +
+      '<meta name="theme-color" content="#f1f3f8" media="(prefers-color-scheme: light)">\n' +
+      '<meta name="theme-color" content="#0a0d15" media="(prefers-color-scheme: dark)">\n' +
+      '<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="Норма">\n' +
+      '<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">\n<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">\n' +
+      '<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>\n' +
+      '</head>\n<body>\n' +
+      body +
+      '</body>\n</html>\n',
+  );
+  console.log(`  калькулятор: ../docs/calc/index.html, dist/calc-artifact.html (${Math.round(body.length / 1024)} КБ)`);
+}
+
 if (watch) {
   const ctx = await esbuild.context(options);
   await ctx.watch();
 } else if (demo) {
   await buildDemo();
+} else if (process.argv.includes('--calc')) {
+  await buildCalc();
 } else {
   await esbuild.build(options);
   await buildDemo();
+  await buildCalc();
 }

@@ -7,7 +7,8 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
-    "test": "node --test test/calc.test.mjs test/xlsx.test.mjs",
+    "build:calc": "node build.mjs --calc",
+    "test": "node --test test/calc.test.mjs test/xlsx.test.mjs test/calcmodel.test.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-norma \"node --test test/rules.test.mjs\"",
     "emulators": "firebase emulators:start --only auth,firestore --project demo-norma"
   },
