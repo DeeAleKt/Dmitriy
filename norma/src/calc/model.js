@@ -220,7 +220,7 @@ export function recordsIn(days, from, to) {
 }
 
 /** Поточна серія: скільки останніх збережених днів поспіль із нормою (вихідні серію не рвуть). */
-export function streak(days, goal) {
+export function streak(days, goal, openDate = null) {
   const list = Object.values(days).sort((a, b) => a.date.localeCompare(b.date));
   let cur = 0;
   let best = 0;
@@ -228,7 +228,7 @@ export function streak(days, goal) {
     const c = computeDay(r, r.base || 420);
     if (!c.valid) continue;
     if (c.pct >= goal - 0.05) best = Math.max(best, ++cur);
-    else cur = 0;
+    else if (r.date !== openDate) cur = 0; // сьогоднішня зміна ще триває — не рахуємо її провалом
   }
   return { cur, best };
 }
@@ -261,8 +261,18 @@ export function summarize(records, goal = 100) {
   const down = new Map();
   const other = new Map();
   const prod = new Map();
+  const shifts = new Map();
+  const perf = new Map();
+  let lostPieces = 0;
   const wd = Array.from({ length: 7 }, () => ({ earned: 0, avail: 0, n: 0 }));
   const days = [];
+  const acc = (map, key, c) => {
+    const e = map.get(key) || { name: key, earned: 0, avail: 0, n: 0 };
+    e.earned += c.earned;
+    e.avail += c.avail;
+    e.n++;
+    map.set(key, e);
+  };
   for (const r of [...records].sort((a, b) => a.date.localeCompare(b.date))) {
     const c = computeDay(r, r.base || 420);
     if (!c.valid) continue;
@@ -292,7 +302,15 @@ export function summarize(records, goal = 100) {
     wd[w].earned += c.earned;
     wd[w].avail += c.avail;
     wd[w].n++;
+    acc(shifts, r.shiftName || `${r.start}–${r.end}`, c);
+    // «чистий» день одного виробу — по ньому видно, як іде саме цей виріб
+    if (c.active.length === 1 && c.otherMin === 0) {
+      acc(perf, c.active[0].name || 'Без назви', c);
+      lostPieces += (c.downMin * c.active[0].norm) / (r.base || 420);
+    }
   }
+  const rate = (m) => [...m.values()].map((e) => ({ name: e.name, n: e.n, pct: e.avail > 0 ? (e.earned / e.avail) * 100 : 0 })).sort((a, b) => b.pct - a.pct);
+  const last = days.slice(-10);
   return {
     n: days.length,
     days,
@@ -312,7 +330,109 @@ export function summarize(records, goal = 100) {
     other: sortedMap(other),
     products: [...prod.values()].map((e) => ({ name: e.name, qty: e.qty, days: e.dates.size })).sort((a, b) => b.qty - a.qty),
     weekdays: wd.map((x, i) => ({ i, n: x.n, pct: x.avail > 0 ? (x.earned / x.avail) * 100 : null })),
+    shifts: rate(shifts),
+    perf: rate(perf),
+    lostPieces,
+    last10: { n: last.length, goal: last.filter((d) => d.pct >= goal - 0.05).length },
   };
+}
+
+// ---------- Тенденції ----------
+
+/** Нахил лінійного тренду виконання: % за робочий день і за тиждень (5 днів). */
+export function trendOf(items) {
+  const n = items.length;
+  if (n < 5) return null;
+  const my = items.reduce((s, d) => s + d.pct, 0) / n;
+  const mx = (n - 1) / 2;
+  let num = 0;
+  let den = 0;
+  items.forEach((d, i) => {
+    num += (i - mx) * (d.pct - my);
+    den += (i - mx) ** 2;
+  });
+  const slope = den ? num / den : 0;
+  const week = slope * 5;
+  return { slope, week, dir: Math.abs(week) < 1 ? 'flat' : week > 0 ? 'up' : 'down' };
+}
+
+/** Ковзне середнє за k останніх записаних днів (зважене за часом). */
+export function movingAvg(items, k = 5) {
+  return items.map((_, i) => {
+    const w = items.slice(Math.max(0, i - k + 1), i + 1);
+    const a = w.reduce((s, x) => s + x.c.avail, 0);
+    return a > 0 ? (w.reduce((s, x) => s + x.c.earned, 0) / a) * 100 : null;
+  });
+}
+
+/** Середні по тижнях (з понеділка) і зміна до попереднього тижня. */
+export function weeksOf(items) {
+  const map = new Map();
+  for (const d of items) {
+    const k = weekRange(d.date).from;
+    const e = map.get(k) || { from: k, first: d.date, last: d.date, earned: 0, avail: 0, n: 0 };
+    e.last = d.date;
+    e.earned += d.c.earned;
+    e.avail += d.c.avail;
+    e.n++;
+    map.set(k, e);
+  }
+  const out = [...map.values()].sort((a, b) => a.from.localeCompare(b.from)).map((w) => ({ ...w, pct: w.avail > 0 ? (w.earned / w.avail) * 100 : 0 }));
+  out.forEach((w, i) => (w.delta = i ? w.pct - out[i - 1].pct : null));
+  return out;
+}
+
+/**
+ * Скільки треба в середньому в решту робочих днів місяця (пн–пт без записів),
+ * щоб місяць закрився на мету. Лише для поточного місяця.
+ */
+/** Сьогоднішня зміна ще не закінчилась — день не остаточний (для серій, тенденції, плану). */
+export function openDayOf(days, todayISO, now = new Date()) {
+  const r = days[todayISO];
+  if (!r) return null;
+  const p = paceAt(r, computeDay(r, r.base || 420), now);
+  return p && p.state !== 'after' ? todayISO : null;
+}
+export function monthPlan(days, todayISO, goal, openDate = null) {
+  const { from, to } = monthRange(todayISO);
+  const s = summarize(
+    recordsIn(days, from, to).filter((r) => r.date !== openDate),
+    goal,
+  );
+  if (!s.n) return null;
+  let rest = 0;
+  for (let d = todayISO; d <= to; d = addDays(d, 1)) {
+    const wd = fromISO(d).getDay();
+    if (wd !== 0 && wd !== 6 && (!days[d] || d === openDate)) rest++;
+  }
+  const avgAvail = s.avail / s.n;
+  if (!rest) return { rest, pct: s.pct, done: s.pct >= goal - 0.05 };
+  const need = ((goal / 100) * (s.avail + rest * avgAvail) - s.earned) / (rest * avgAvail);
+  return { rest, pct: s.pct, needPct: need * 100, done: need <= 0 };
+}
+
+/** Порівняння одного дня з попереднім записом, середнім за 30 днів і рекордом. */
+export function compareDay(days, date, goal) {
+  const before = Object.keys(days)
+    .filter((d) => d < date)
+    .sort();
+  const prevDate = before[before.length - 1];
+  const prev = prevDate ? computeDay(days[prevDate], days[prevDate].base || 420) : null;
+  const month = summarize(recordsIn(days, addDays(date, -30), addDays(date, -1)), goal);
+  const others = Object.fromEntries(Object.entries(days).filter(([d]) => d !== date));
+  return {
+    prev: prev?.valid ? { date: prevDate, pct: prev.pct } : null,
+    avg30: month.n ? { n: month.n, pct: month.pct } : null,
+    best: bestDay(others),
+  };
+}
+
+/** Місце дня серед днів його місяця за виконанням (1 — найкращий). */
+export function rankInMonth(days, date) {
+  const { from, to } = monthRange(date);
+  const list = summarize(recordsIn(days, from, to)).days.sort((a, b) => b.pct - a.pct);
+  const i = list.findIndex((d) => d.date === date);
+  return i < 0 ? null : { place: i + 1, of: list.length };
 }
 
 // ---------- Періоди ----------
@@ -359,30 +479,53 @@ export const fmtShortDate = (iso) => {
 
 // ---------- Підказки ----------
 
-/** Кілька коротких фактів про період. */
-export function insights(cur, prev, goal, period) {
+/** Висновки про період: тенденція, план на місяць, порівняння, сильні й слабкі місця. */
+export function insights(cur, prev, goal, period, extra = {}) {
   const out = [];
+  const t = extra.trend;
+  if (t) {
+    if (t.dir === 'up') out.push({ icon: 'up', tone: 'good', text: `Тенденція зростає: у середньому +${fmt(t.week, 1)}% щотижня` });
+    else if (t.dir === 'down') out.push({ icon: 'down', tone: 'bad', text: `Тенденція знижується: у середньому −${fmt(-t.week, 1)}% щотижня` });
+    else out.push({ icon: 'target', tone: 'muted', text: 'Тенденція стабільна — без помітного росту чи спаду' });
+  }
+  const plan = extra.plan;
+  if (plan && plan.rest > 0) {
+    const days = `${plan.rest} ${plural(plan.rest, ['робочий день', 'робочі дні', 'робочих днів'])}`;
+    if (plan.done) out.push({ icon: 'sparkle', tone: 'good', text: `Місяць уже виходить на ${goal}% — у решту ${days} достатньо тримати рівень` });
+    else if (plan.needPct > 150) out.push({ icon: 'target', tone: 'bad', text: `Щоб закрити місяць на ${goal}%, у решту ${days} треба понад 150% — мета місяця навряд досяжна` });
+    else out.push({ icon: 'target', tone: plan.needPct > 110 ? 'warn' : 'muted', text: `Щоб закрити місяць на ${goal}%, у решту ${days} треба в середньому ${fmt(plan.needPct, 0)}%` });
+  }
   if (prev && prev.n >= 2 && cur.n >= 2) {
     const d = cur.pct - prev.pct;
     if (Math.abs(d) >= 0.5)
       out.push({ icon: d > 0 ? 'up' : 'down', tone: d > 0 ? 'good' : 'bad', text: `Середнє ${d > 0 ? 'вище' : 'нижче'} на ${fmt(Math.abs(d), 1)}%, ніж ${period.prevLabel}` });
-    else out.push({ icon: 'up', tone: 'muted', text: `Середнє майже як ${period.prevLabel}` });
+  }
+  if (cur.last10.n >= 5) {
+    const { n, goal: g } = cur.last10;
+    out.push({ icon: 'flame', tone: g / n >= 0.7 ? 'good' : g / n < 0.4 ? 'bad' : 'warn', text: `${g} з ${n} останніх днів — з нормою` });
   }
   const wd = cur.weekdays.filter((w) => w.n >= 2 && w.pct != null);
   if (wd.length >= 3) {
     const b = wd.reduce((a, x) => (x.pct > a.pct ? x : a));
-    out.push({ icon: 'calendar', text: `Найкраще виходить у ${WEEKDAYS_ACC[b.i]}: у середньому ${fmt(b.pct, 1)}%` });
+    const w = wd.reduce((a, x) => (x.pct < a.pct ? x : a));
+    if (b.pct - w.pct >= 3) out.push({ icon: 'calendar', text: `Найкраще виходить у ${WEEKDAYS_ACC[b.i]} (${fmt(b.pct, 0)}%), найважче — у ${WEEKDAYS_ACC[w.i]} (${fmt(w.pct, 0)}%)` });
   }
-  if (cur.maxRun >= 2) out.push({ icon: 'flame', tone: 'good', text: `Найдовша серія з нормою — ${cur.maxRun} ${plural(cur.maxRun, ['день', 'дні', 'днів'])} поспіль` });
+  const sh = cur.shifts.filter((x) => x.n >= 2);
+  if (sh.length >= 2 && sh[0].pct - sh[sh.length - 1].pct >= 3)
+    out.push({ icon: 'clock', text: `Краще йде «${sh[0].name}» (${fmt(sh[0].pct, 0)}%), ніж «${sh[sh.length - 1].name}» (${fmt(sh[sh.length - 1].pct, 0)}%)` });
+  const pf = cur.perf.filter((x) => x.n >= 2);
+  if (pf.length >= 2 && pf[0].pct - pf[pf.length - 1].pct >= 3)
+    out.push({ icon: 'box', text: `Найкраще виходить «${pf[0].name}» (${fmt(pf[0].pct, 0)}%), найважче — «${pf[pf.length - 1].name}» (${fmt(pf[pf.length - 1].pct, 0)}%)` });
   if (cur.down.length) {
-    const t = cur.down[0];
-    out.push({ icon: 'pause', tone: 'warn', text: `Найбільше простою через «${t.name}» — ${fmtMin(t.min)}` });
+    const top = cur.down[0];
+    const lost = cur.lostPieces >= 1 ? `, недороблено ≈ ${fmt(cur.lostPieces, 0)} шт` : '';
+    out.push({ icon: 'pause', tone: 'warn', text: `Простій забрав ${fmtMin(cur.downMin)}${lost}; найчастіше — «${top.name}»` });
   }
   if (cur.otherMin > 0 && cur.workMin > 0)
     out.push({ icon: 'wrench', text: `Інші роботи — ${fmtMin(cur.otherMin)}, це ${fmt((cur.otherMin / cur.workMin) * 100, 0)}% робочого часу` });
+  if (cur.maxRun >= 3) out.push({ icon: 'flame', tone: 'good', text: `Найдовша серія з нормою — ${cur.maxRun} ${plural(cur.maxRun, ['день', 'дні', 'днів'])} поспіль` });
   if (cur.best && cur.n >= 3) out.push({ icon: 'trophy', tone: 'good', text: `Найкращий день — ${fmtShortDate(cur.best.date)}: ${fmt(cur.best.pct, 1)}%` });
-  if (cur.n >= 3 && cur.goalDays === cur.n) out.push({ icon: 'sparkle', tone: 'good', text: `Мету ${goal}% виконано в усі дні періоду` });
-  return out.slice(0, 5);
+  return out.slice(0, 7);
 }
 
 // ---------- Приклад даних ----------

@@ -1,20 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { addDays, fmt, fmtHM, fmtMin, fmtTime, fromISO, store, today } from '../util.js';
+import { addDays, fmt, fmtHM, fmtMin, fmtTime, fromISO, plural, store, today } from '../util.js';
 import { useApp, useNow } from './ctx.js';
+import { backup, BACKUP_KEY } from './files.js';
 import { buzz, confetti } from './fx.js';
 import { Gauge } from './Gauge.jsx';
 import {
+  bestDay,
+  compareDay,
   computeDay,
   DOWN_MINUTES,
+  fmtShortDate,
   isBlank,
   level,
   minutesLabel,
   newKey,
   num,
+  openDayOf,
   OTHER_MINUTES,
   paceAt,
+  rankInMonth,
   sameRecord,
   shiftLength,
+  streak,
   toGoal,
   toRecord,
 } from './model.js';
@@ -90,14 +97,15 @@ function statusOf(res, goal, base) {
 }
 
 export function Today() {
-  const { settings, setSettings, days, draft, setDraft, saveDay, switchDate, openSettings } = useApp();
+  const { settings, setSettings, days, draft, setDraft, sync, switchDate, openSettings } = useApp();
   const now = useNow(30000);
   const base = settings.base;
   const goal = settings.goal;
   const res = useMemo(() => computeDay(draft, base), [draft, base]);
   const record = useMemo(() => toRecord(draft, base), [draft, base]);
   const saved = days[draft.date];
-  const dirty = saved ? saved.sample || !sameRecord(record, saved) : !isBlank(draft);
+  const blank = isBlank(draft);
+  const dirty = saved ? !sameRecord(record, saved) : !blank;
   const isToday = draft.date === today();
   const pace = useMemo(() => paceAt(draft, res, now), [draft, res, now]);
   const lv = res.hasInput && res.valid ? level(res.pct, goal) : 'idle';
@@ -105,21 +113,31 @@ export function Today() {
   const [sheet, setSheet] = useState(null);
   const [tip, setTip] = useState(() => !store(TIP_KEY) && !Object.keys(days).length);
   const title = dateTitle(draft.date);
-  const canSave = res.valid && (res.hasInput || res.active.length > 0);
 
-  // Конфеті, коли під час введення вперше перетнули мету за цей день
-  const prev = useRef(res.pct);
+  // Свято, коли під час введення перетнули мету чи свій рекорд (раз на день)
+  const prev = useRef({ date: draft.date, pct: res.pct });
   const fired = useRef(new Set());
   useEffect(() => {
     const was = prev.current;
-    prev.current = res.pct;
-    if (!settings.celebrate || !res.hasInput || res.error) return;
-    if (was < goal - 0.05 && res.pct >= goal - 0.05 && !fired.current.has(draft.date)) {
-      fired.current.add(draft.date);
-      confetti({ y: 0.22, count: 110 });
+    prev.current = { date: draft.date, pct: res.pct };
+    if (was.date !== draft.date || !res.hasInput || !res.valid || res.pct <= was.pct) return;
+    const others = Object.fromEntries(Object.entries(days).filter(([d, r]) => d !== draft.date && !r.sample));
+    const best = Object.keys(others).length >= 5 ? bestDay(others) : null;
+    const key = draft.date;
+    if (best && was.pct <= best.pct && res.pct > best.pct + 0.05 && !fired.current.has(`${key}:best`)) {
+      fired.current.add(`${key}:best`).add(`${key}:goal`);
+      toast(`Новий особистий рекорд — ${fmt(res.pct, 1)}%!`, 'ok', 'trophy');
+      if (settings.celebrate) confetti({ y: 0.22, count: 170 });
+      buzz(30);
+    } else if (was.pct < goal - 0.05 && res.pct >= goal - 0.05 && !fired.current.has(`${key}:goal`)) {
+      fired.current.add(`${key}:goal`);
+      const run = streak({ ...others, [key]: record }, goal).cur;
+      const done = goal === 100 ? 'Норму виконано' : `Мету ${goal}% досягнуто`;
+      toast(run >= 2 ? `${done} · ${run} ${plural(run, ['день', 'дні', 'днів'])} поспіль` : `${done}!`, 'ok', run >= 2 ? 'flame' : 'sparkle');
+      if (settings.celebrate) confetti({ y: 0.22, count: 110 });
       buzz(25);
     }
-  }, [res.pct]);
+  }, [res.pct, draft.date]);
 
   const patch = (p) => setDraft((d) => ({ ...d, ...p }));
   const setProduct = (key, p) => setDraft((d) => ({ ...d, products: d.products.map((x) => (x.key === key ? { ...x, ...p } : x)) }));
@@ -156,7 +174,7 @@ export function Today() {
   async function clearDay() {
     const ok = await ask({
       title: 'Очистити розрахунок?',
-      text: saved ? 'Збережений запис цього дня не зміниться, доки ви його не оновите.' : 'Кількості, простій та інші роботи буде прибрано.',
+      text: saved ? 'Кількості, простій та інші роботи буде прибрано, а день зникне з історії та статистики.' : 'Кількості, простій та інші роботи буде прибрано.',
       ok: 'Очистити',
       danger: true,
     });
@@ -186,7 +204,7 @@ export function Today() {
       {!isToday && (
         <div class="banner">
           <Icon name="history" size={18} />
-          <span>{saved ? (saved.sample ? 'Це день із прикладу. Збережіть, щоб зробити його своїм.' : 'Ви редагуєте збережений день.') : 'Запис за минулий день.'}</span>
+          <span>{saved?.sample ? 'Це день із прикладу — змініть щось, і він стане вашим.' : saved ? 'Минулий день · зміни зберігаються самі.' : 'Запис за минулий день · зберігається сам.'}</span>
           <button class="link" onClick={() => switchDate(today())}>
             До сьогодні
           </button>
@@ -213,10 +231,13 @@ export function Today() {
             <b>{fmt(res.pieces)}</b>
           </div>
         </div>
-        <Pace pace={pace} res={res} isToday={isToday} dirty={dirty} saved={saved} />
-        <button class="panel-how" onClick={() => setSheet({ type: 'how' })} disabled={!res.valid}>
-          <Icon name="info" size={15} /> Як пораховано
-        </button>
+        <Pace pace={pace} res={res} isToday={isToday} />
+        <div class="panel-foot">
+          <SaveChip sync={sync} dirty={dirty} invalid={!blank && !res.valid} blank={blank && !saved} onClick={() => setSheet({ type: 'sync' })} />
+          <button class="panel-how" onClick={() => setSheet({ type: 'how' })} disabled={!res.valid}>
+            <Icon name="info" size={15} /> Як пораховано
+          </button>
+        </div>
       </section>
 
       {tip && (
@@ -241,10 +262,12 @@ export function Today() {
             <li>Оберіть зміну — час і перерва підставляться самі.</li>
             <li>Впишіть норму виробу за зміну і скільки зробили. Тримайте «+», щоб рахувати швидко.</li>
             <li>Простій та інші роботи обирайте зі списку — з хвилинами.</li>
-            <li>Наприкінці зміни натисніть «Зберегти день» — так зʼявиться ваша статистика.</li>
+            <li>Нічого зберігати вручну не треба: кожна зміна записується сама, а у «Статистиці» видно тенденцію й висновки.</li>
           </ol>
         </section>
       )}
+
+      <BackupNudge mode={sync.mode} settings={settings} days={days} />
 
       <button class="card shift-card" onClick={() => setSheet({ type: 'shift' })}>
         <span class="head-ico">
@@ -314,7 +337,9 @@ export function Today() {
         onRemove={(key) => setDraft((d) => ({ ...d, others: d.others.filter((x) => x.key !== key) }))}
       />
 
-      {!isBlank(draft) && (
+      <DayContext days={days} date={draft.date} record={record} res={res} goal={goal} isToday={isToday} />
+
+      {!blank && (
         <button class="text-btn" onClick={clearDay}>
           <Icon name="reset" size={16} /> Очистити розрахунок
         </button>
@@ -322,28 +347,8 @@ export function Today() {
 
       <p class="privacy">
         <Icon name="shield" size={16} />
-        <span>Усе рахується й зберігається лише на цьому телефоні. Нічого нікуди не надсилається.</span>
+        <span>{privacyText(sync.mode)}</span>
       </p>
-
-      <div class="savebar">
-        <div class="savebar-in">
-          <div class={`sb-pct lv-${lv}`}>
-            <b>{fmt(res.pct, 1)}%</b>
-            <small>{saved && !dirty ? 'збережено' : dirty ? 'не збережено' : 'сьогодні'}</small>
-          </div>
-          <button class="btn primary sb-btn" disabled={!canSave || (saved && !dirty)} onClick={saveDay}>
-            {saved && !dirty ? (
-              <>
-                <Icon name="check" size={18} /> Збережено
-              </>
-            ) : saved && !saved.sample ? (
-              'Оновити день'
-            ) : (
-              'Зберегти день'
-            )}
-          </button>
-        </div>
-      </div>
 
       {sheet?.type === 'how' && (
         <Sheet
@@ -360,6 +365,7 @@ export function Today() {
           <Breakdown day={draft} res={res} base={base} />
         </Sheet>
       )}
+      {sheet?.type === 'sync' && <SyncSheet sync={sync} settings={settings} days={days} onClose={() => setSheet(null)} />}
       {sheet?.type === 'shift' && (
         <ShiftSheet draft={draft} res={res} settings={settings} setSettings={setSettings} onApply={patch} onClose={() => setSheet(null)} />
       )}
@@ -406,7 +412,7 @@ export function Today() {
 
 // ---------- Темп зміни ----------
 
-function Pace({ pace, res, isToday, dirty, saved }) {
+function Pace({ pace, res, isToday }) {
   if (!pace) return null;
   if (pace.state === 'before') {
     if (!isToday || pace.inMin > 12 * 60) return null;
@@ -418,11 +424,11 @@ function Pace({ pace, res, isToday, dirty, saved }) {
     );
   }
   if (pace.state === 'after') {
-    if (!isToday || !(dirty || !saved) || !res.hasInput) return null;
+    if (!isToday || !res.hasInput || !res.valid) return null;
     return (
-      <div class="pace attention">
+      <div class="pace">
         <Icon name="check" size={16} />
-        <span>Зміна завершилась — збережіть день, щоб він потрапив у статистику</span>
+        <span>Зміна завершилась — день уже в історії та статистиці</span>
       </div>
     );
   }
@@ -457,6 +463,211 @@ function Pace({ pace, res, isToday, dirty, saved }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ---------- Збереження ----------
+
+function privacyText(mode) {
+  if (mode === 'cloud') return 'Дані зберігаються самі у вашому особистому розділі акаунта Claude. Бачите їх лише ви.';
+  if (mode === 'connecting') return 'Дані зберігаються самі — спершу на телефоні, потім в акаунті.';
+  return 'Дані зберігаються самі, лише на цьому телефоні. Нікуди не надсилаються.';
+}
+
+function SaveChip({ sync, dirty, invalid, blank, onClick }) {
+  const cloud = sync.mode === 'cloud';
+  let s;
+  if (invalid) s = { tone: 'warn', icon: 'info', text: 'Не збережено' };
+  else if (dirty || (cloud && sync.status === 'saving')) s = { tone: 'busy', icon: cloud ? 'cloud' : 'phone', text: 'Зберігаю…' };
+  else if (cloud && sync.status === 'error') s = { tone: 'warn', icon: 'cloudOff', text: 'Лише на телефоні' };
+  else if (sync.mode === 'connecting') s = { tone: '', icon: 'cloud', text: 'Підключаю…' };
+  else if (blank) s = { tone: '', icon: cloud ? 'cloud' : 'phone', text: 'Автозбереження' };
+  else s = { tone: 'ok', icon: cloud ? 'cloudCheck' : 'phone', text: cloud ? 'Збережено' : 'На телефоні' };
+  return (
+    <button class={`savechip ${s.tone}`} onClick={onClick} aria-label={`Збереження: ${s.text}`}>
+      <Icon name={s.icon} size={15} />
+      <span aria-live="polite">{s.text}</span>
+    </button>
+  );
+}
+
+function SyncSheet({ sync, settings, days, onClose }) {
+  const real = Object.values(days).filter((r) => !r.sample).length;
+  const at = sync.at ? new Date(sync.at) : null;
+  const where = {
+    cloud: {
+      icon: 'cloudCheck',
+      title: 'В акаунті Claude',
+      text: 'Кожна зміна записується сама за секунду — у ваш особистий розділ акаунта. Бачите ці дані лише ви: ні автор сторінки, ні інші люди доступу до них не мають. Відкрийте калькулятор на іншому телефоні чи компʼютері під тим самим акаунтом — історія буде та сама.',
+    },
+    connecting: { icon: 'cloud', title: 'Підключаю акаунт…', text: 'Поки що все записується на телефоні, а щойно акаунт підключиться — дані перенесуться туди.' },
+    denied: { icon: 'phone', title: 'На цьому телефоні', text: 'Сторінка не має дозволу зберігати дані в акаунті, тому вони лишаються лише в памʼяті цього браузера. Час від часу зберігайте резервну копію.' },
+    local: {
+      icon: 'phone',
+      title: 'На цьому телефоні',
+      text: 'Кожна зміна записується сама в памʼять цього браузера й нікуди не надсилається. Якщо почистити дані браузера чи змінити телефон — історія зникне, тож час від часу зберігайте резервну копію у файл.',
+    },
+  }[sync.mode] || {};
+  return (
+    <Sheet
+      title="Збереження"
+      sub="Кнопки «Зберегти» немає — усе записується саме"
+      onClose={onClose}
+      footer={
+        <button class="btn soft block" onClick={() => backup(settings, days).then((r) => r === 'saved' && toast('Копію збережено')).catch((e) => toast(e.message, 'err'))}>
+          <Icon name="download" size={18} /> Резервна копія у файл
+        </button>
+      }
+    >
+      <div class={`sync-hero ${sync.mode}`}>
+        <span class="sync-ico">
+          <Icon name={where.icon} size={22} />
+        </span>
+        <div>
+          <b>{where.title}</b>
+          <small>
+            {sync.mode === 'cloud' && sync.status === 'error'
+              ? 'Остання спроба не вдалась — дані на телефоні, повторю сам'
+              : sync.mode === 'cloud' && sync.status === 'saving'
+                ? 'Записую…'
+                : at
+                  ? `Синхронізовано о ${fmtTime(at.toTimeString().slice(0, 5))}`
+                  : `${real} ${plural(real, ['день', 'дні', 'днів'])} в історії`}
+          </small>
+        </div>
+      </div>
+      <p class="sync-text">{where.text}</p>
+      <div class="sync-facts">
+        <div>
+          <span>Днів в історії</span>
+          <b>{real}</b>
+        </div>
+        <div>
+          <span>Моїх виробів</span>
+          <b>{settings.products.length}</b>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+const SNOOZE_KEY = 'norma.v2.backup-snooze';
+const DAY_MS = 864e5;
+
+/** Коли дані лише на телефоні — раз на два тижні нагадати про резервну копію. */
+function BackupNudge({ mode, settings, days }) {
+  const [hidden, setHidden] = useState(false);
+  if (hidden || (mode !== 'local' && mode !== 'denied')) return null;
+  const real = Object.values(days).filter((r) => !r.sample).length;
+  const now = Date.now();
+  const last = store(BACKUP_KEY) || 0;
+  if (real < 7 || now - last < 14 * DAY_MS || (store(SNOOZE_KEY) || 0) > now) return null;
+  return (
+    <section class="card tip-card nudge">
+      <div class="tip-head">
+        <span class="head-ico warn">
+          <Icon name="download" size={17} />
+        </span>
+        <b>{last ? `Остання копія — ${Math.floor((now - last) / DAY_MS)} дн. тому` : 'Ще жодної резервної копії'}</b>
+      </div>
+      <p>
+        {real} {plural(real, ['день', 'дні', 'днів'])} історії зберігаються лише в цьому браузері. Збережіть копію у файл — і нічого не загубиться, навіть якщо змінити телефон.
+      </p>
+      <div class="row">
+        <button
+          class="btn ghost"
+          onClick={() => {
+            store(SNOOZE_KEY, now + 7 * DAY_MS);
+            setHidden(true);
+          }}
+        >
+          Пізніше
+        </button>
+        <button
+          class="btn primary grow"
+          onClick={() =>
+            backup(settings, days)
+              .then((r) => {
+                if (r !== 'saved') return;
+                toast('Копію збережено', 'ok', 'check');
+                setHidden(true);
+              })
+              .catch((e) => toast(e.message, 'err'))
+          }
+        >
+          <Icon name="download" size={18} /> Зберегти копію
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Цей день серед інших ----------
+
+const signed = (x) => `${x > 0 ? '+' : x < 0 ? '−' : '±'}${fmt(Math.abs(x), 1)}%`;
+
+function DayContext({ days, date, record, res, goal, isToday }) {
+  const data = useMemo(() => {
+    if (!res.valid || !res.hasInput) return null;
+    const others = Object.fromEntries(Object.entries(days).filter(([d]) => d !== date));
+    if (!Object.keys(others).length) return null;
+    const all = { ...others, [date]: record };
+    return {
+      cmp: compareDay(others, date, goal),
+      rank: rankInMonth(all, date),
+      run: streak(all, goal, isToday ? openDayOf(all, date) : null).cur,
+    };
+  }, [days, date, record, res.valid, res.hasInput, goal, isToday]);
+  if (!data) return null;
+  const { cmp, rank, run } = data;
+  const pct = res.pct;
+  const tiles = [];
+  if (cmp.prev) {
+    const near = cmp.prev.date === addDays(date, -1);
+    tiles.push({ label: near && isToday ? 'Вчора' : 'Попередній', value: cmp.prev.pct, sub: fmtShortDate(cmp.prev.date) });
+  }
+  if (cmp.avg30 && cmp.avg30.n >= 2) tiles.push({ label: 'Середнє', value: cmp.avg30.pct, sub: `${cmp.avg30.n} ${plural(cmp.avg30.n, ['день', 'дні', 'днів'])} до того` });
+  if (cmp.best) tiles.push({ label: 'Рекорд', value: cmp.best.pct, sub: fmtShortDate(cmp.best.date), best: true });
+  if (!tiles.length) return null;
+  const isRecord = cmp.best && pct > cmp.best.pct + 0.05;
+  const monthName = MONTHS_GEN[fromISO(date).getMonth()];
+  return (
+    <section class="card">
+      <CardHead icon="chart" title={isToday ? 'Сьогодні серед інших днів' : 'Цей день серед інших'} aside={`${fmt(pct, 1)}%`} />
+      <div class="ctx-grid">
+        {tiles.map((t) => {
+          const d = pct - t.value;
+          return (
+            <div class="ctx-tile">
+              <span class="ctx-label">{t.label}</span>
+              <b class="ctx-value">{fmt(t.value, 1)}%</b>
+              <span class="ctx-sub">{t.sub}</span>
+              {t.best && isRecord ? (
+                <span class="ctx-delta up">
+                  <Icon name="trophy" size={12} /> рекорд
+                </span>
+              ) : (
+                <span class={`ctx-delta ${Math.abs(d) < 0.05 ? '' : d > 0 ? 'up' : 'down'}`}>{signed(d)}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div class="ctx-notes">
+        {rank && rank.of >= 3 && (
+          <span>
+            <Icon name="trophy" size={15} />
+            {rank.place === 1 ? `Найкращий день ${monthName}` : `${rank.place}-е місце з ${rank.of} днів ${monthName}`}
+          </span>
+        )}
+        {run >= 2 && (
+          <span>
+            <Icon name="flame" size={15} />
+            {run} {plural(run, ['день', 'дні', 'днів'])} поспіль {goal === 100 ? 'з нормою' : `з метою ${goal}%`}
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -3,12 +3,12 @@ import { fmt, fmtMin, fmtTime, plural } from '../util.js';
 import { useApp } from './ctx.js';
 import { backup, exportExcel, readBackup } from './files.js';
 import { DEFAULT_DOWN, DEFAULT_OTHER, makeSample, newKey, num, shiftLength } from './model.js';
-import { clearAll } from './store.js';
 import { ask, cleanNum, Icon, Segmented, Sheet, toast, Toggle } from './ui.jsx';
 import { today } from '../util.js';
 
 export function Settings({ onClose }) {
-  const { settings, setSettings, days, setDays } = useApp();
+  const { settings, setSettings, days, setDays, sync, wipeAll } = useApp();
+  const cloud = sync.mode === 'cloud';
   const [edit, setEdit] = useState(null); // {type:'shift'|'product', item}
   const set = (p) => setSettings((s) => ({ ...s, ...p }));
   const real = Object.values(days).filter((r) => !r.sample);
@@ -44,13 +44,14 @@ export function Settings({ onClose }) {
   async function wipe() {
     const ok = await ask({
       title: 'Видалити всі дані?',
-      text: 'Зникнуть історія, статистика, мої вироби й налаштування на цьому пристрої. Скасувати це неможливо — спершу можна зберегти резервну копію.',
+      text: cloud
+        ? 'Зникнуть історія, статистика, мої вироби й налаштування — і в акаунті, і на всіх ваших пристроях. Скасувати це неможливо — спершу можна зберегти резервну копію.'
+        : 'Зникнуть історія, статистика, мої вироби й налаштування на цьому пристрої. Скасувати це неможливо — спершу можна зберегти резервну копію.',
       ok: 'Видалити все',
       danger: true,
     });
     if (!ok) return;
-    clearAll();
-    location.reload();
+    await wipeAll();
   }
 
   return (
@@ -218,7 +219,7 @@ export function Settings({ onClose }) {
             <span class="srow-main">
               <b>Видалити всі дані</b>
               <small>
-                {real.length} {plural(real.length, ['збережений день', 'збережені дні', 'збережених днів'])} на цьому пристрої
+                {real.length} {plural(real.length, ['збережений день', 'збережені дні', 'збережених днів'])} {cloud ? 'в акаунті' : 'на цьому пристрої'}
               </small>
             </span>
           </button>
@@ -227,7 +228,11 @@ export function Settings({ onClose }) {
 
       <p class="privacy">
         <Icon name="shield" size={16} />
-        <span>Усе зберігається лише в цьому браузері на вашому телефоні й нікуди не надсилається. Якщо міняєте телефон або чистите браузер — спершу збережіть резервну копію.</span>
+        <span>
+          {cloud
+            ? 'Дані зберігаються самі в особистому розділі вашого акаунта Claude — їх бачите лише ви, на будь-якому своєму пристрої. Резервна копія у файл — про всяк випадок.'
+            : 'Дані зберігаються самі, лише в цьому браузері на вашому телефоні, й нікуди не надсилаються. Якщо міняєте телефон або чистите браузер — спершу збережіть резервну копію.'}
+        </span>
       </p>
 
       {edit?.type === 'shift' && <ShiftEdit item={edit.item} onClose={() => setEdit(null)} />}

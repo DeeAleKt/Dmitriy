@@ -9,12 +9,17 @@ import {
   insights,
   level,
   makeSample,
+  monthPlan,
   MONTHS_SHORT,
   moveAnchor,
+  movingAvg,
+  openDayOf,
   periodOf,
   recordsIn,
   streak,
   summarize,
+  trendOf,
+  weeksOf,
   WEEKDAYS_SHORT,
 } from './model.js';
 import { CardHead, Empty, Icon, Segmented, toast } from './ui.jsx';
@@ -36,11 +41,24 @@ export function Stats() {
   const recs = useMemo(() => recordsIn(days, period.from, period.to), [days, period.from, period.to]);
   const cur = useMemo(() => summarize(recs, goal), [recs, goal]);
   const prev = useMemo(() => summarize(recordsIn(days, prevPeriod.from, prevPeriod.to), goal), [days, prevPeriod.from, prevPeriod.to, goal]);
-  const st = useMemo(() => streak(days, goal), [days, goal]);
-  const best = useMemo(() => bestDay(days), [days]);
-  const facts = useMemo(() => insights(cur, prev, goal, period), [cur, prev, goal, period.label]);
   const t = today();
   const isCurrent = period.from <= t && t <= period.to;
+  // сьогоднішня зміна ще триває — її неповний відсоток не ламає серію, тенденцію і план
+  const open = openDayOf(days, t);
+  const st = useMemo(() => streak(days, goal, open), [days, goal, open]);
+  const best = useMemo(() => bestDay(days), [days]);
+  const trend = useMemo(() => trendOf(cur.days.filter((d) => d.date !== open)), [cur, open]);
+  const facts = useMemo(
+    () => insights(cur, prev, goal, period, { trend, plan: mode === 'month' && isCurrent ? monthPlan(days, t, goal, open) : null }),
+    [cur, prev, goal, period.label, trend, days, open],
+  );
+  // ковзне середнє з запасом днів до початку періоду, щоб лінія не «стрибала» на початку
+  const ma = useMemo(() => {
+    if (mode === 'year') return null;
+    const list = summarize(recordsIn(days, addDays(period.from, -14), period.to), goal).days;
+    const vals = movingAvg(list, 5);
+    return new Map(list.map((d, i) => [d.date, vals[i]]));
+  }, [mode, days, period.from, period.to, goal]);
   const any = Object.keys(days).length > 0;
   const hasSample = Object.values(days).some((r) => r.sample);
 
@@ -74,8 +92,8 @@ export function Stats() {
               </button>
             }
           >
-            Зберігайте кожен день кнопкою «Зберегти день» — і тут з’являться середній відсоток, серії днів з нормою,
-            рекорди, календар і куди йде робочий час.
+            Просто вносьте зроблене на вкладці «Сьогодні» — кожен день зберігається сам. Тут зʼявляться середній відсоток,
+            тенденція, серії днів з нормою, рекорди, календар і куди йде робочий час.
           </Empty>
         </section>
       ) : (
@@ -103,7 +121,7 @@ export function Stats() {
           {cur.n === 0 ? (
             <section class="card">
               <Empty icon="calendar" title="За цей період немає збережених днів">
-                {prev.n > 0 ? 'Перегляньте попередній період стрілкою ліворуч.' : 'Збережіть день на вкладці «Сьогодні».'}
+                {prev.n > 0 ? 'Перегляньте попередній період стрілкою ліворуч.' : 'Внесіть день на вкладці «Сьогодні» — він збережеться сам.'}
               </Empty>
             </section>
           ) : (
@@ -138,7 +156,8 @@ export function Stats() {
                   }}
                 />
               )}
-              <Trend mode={mode} period={period} recs={recs} goal={goal} onDay={openDay} />
+              <Trend mode={mode} period={period} recs={recs} goal={goal} ma={ma} trend={trend} onDay={openDay} />
+              {mode === 'month' && <Weeks items={cur.days} goal={goal} />}
 
               {facts.length > 0 && (
                 <section class="card">
@@ -330,7 +349,7 @@ function YearMap({ year, days, goal, onMonth }) {
   );
 }
 
-function Trend({ mode, period, recs, goal, onDay }) {
+function Trend({ mode, period, recs, goal, ma, trend, onDay }) {
   const [sel, setSel] = useState(null);
   const slots = useMemo(() => {
     if (mode === 'year') {
@@ -355,17 +374,30 @@ function Trend({ mode, period, recs, goal, onDay }) {
         date: d,
         label: mode === 'week' ? WEEKDAYS_SHORT[(fromISO(d).getDay() + 6) % 7] : dn === 1 || dn % 5 === 0 ? String(dn) : '',
         v: c?.valid ? c.pct : null,
+        ma: c?.valid ? ma?.get(d) : null,
         title: `${fmtShortDate(d)}: ${c?.valid ? `${fmt(c.pct, 1)}%` : 'немає запису'}`,
       });
     }
     return out;
-  }, [mode, period.from, period.to, recs, goal]);
+  }, [mode, period.from, period.to, recs, goal, ma]);
   const max = Math.min(200, Math.max(goal + 30, ...slots.map((s) => s.v || 0)));
   const picked = slots.find((s) => s.key === sel);
+  const line = slots.map((s, i) => (s.ma != null ? `${i + 0.5},${100 - (Math.min(s.ma, max) / max) * 100}` : null)).filter(Boolean);
+  const trendTag = trend && (
+    <span class={`trend-tag ${trend.dir}`}>
+      <Icon name={trend.dir === 'up' ? 'up' : trend.dir === 'down' ? 'down2' : 'flat'} size={14} />
+      {trend.dir === 'flat' ? 'стабільно' : `${trend.week > 0 ? '+' : '−'}${fmt(Math.abs(trend.week), 1)}% за тиждень`}
+    </span>
+  );
   return (
     <section class="card">
-      <CardHead icon="chart" title={mode === 'year' ? 'По місяцях' : 'По днях'} aside={picked ? picked.title : null} />
+      <CardHead icon="chart" title={mode === 'year' ? 'По місяцях' : 'По днях'} aside={picked ? picked.title + (picked.ma != null ? ` · середнє ${fmt(picked.ma, 0)}%` : '') : trendTag} />
       <div class="chart">
+        {line.length >= 2 && (
+          <svg class="chart-ma" viewBox={`0 0 ${slots.length} 100`} preserveAspectRatio="none" aria-hidden="true">
+            <polyline points={line.join(' ')} />
+          </svg>
+        )}
         <div class="chart-goal" style={{ bottom: `${(goal / max) * 100}%` }}>
           <span>{goal}%</span>
         </div>
@@ -387,11 +419,60 @@ function Trend({ mode, period, recs, goal, onDay }) {
           <span>{s.label}</span>
         ))}
       </div>
+      {line.length >= 2 && (
+        <div class="chart-key">
+          <i /> середнє за 5 робочих днів — видно тенденцію без щоденних стрибків
+        </div>
+      )}
       {picked?.date && (
         <button class="link" onClick={() => onDay(picked.date)}>
           Відкрити {fmtShortDate(picked.date)} <Icon name="right" size={16} />
         </button>
       )}
+    </section>
+  );
+}
+
+/** «5–9 жов», «29 вер – 2 жов» або один день. */
+function spanLabel(a, b) {
+  const x = fromISO(a);
+  const y = fromISO(b);
+  if (a === b) return `${x.getDate()} ${MONTHS_SHORT[x.getMonth()]}`;
+  if (x.getMonth() === y.getMonth()) return `${x.getDate()}–${y.getDate()} ${MONTHS_SHORT[y.getMonth()]}`;
+  return `${x.getDate()} ${MONTHS_SHORT[x.getMonth()]} – ${y.getDate()} ${MONTHS_SHORT[y.getMonth()]}`;
+}
+
+/** Тижні періоду: як змінювався середній відсоток від тижня до тижня. */
+function Weeks({ items, goal }) {
+  const weeks = useMemo(() => weeksOf(items), [items]);
+  if (weeks.length < 2) return null;
+  const max = Math.max(goal + 10, ...weeks.map((w) => w.pct));
+  return (
+    <section class="card">
+      <CardHead icon="calendar" title="По тижнях" />
+      <div class="weeks">
+        {weeks.map((w) => {
+          const lv = level(w.pct, goal);
+          return (
+            <div class="week-row">
+              <span class="week-name">
+                {spanLabel(w.first, w.last)}
+                <small>
+                  {w.n} {plural(w.n, ['день', 'дні', 'днів'])}
+                </small>
+              </span>
+              <span class="week-bar">
+                <i class={`lv-${lv}`} style={{ width: `${(w.pct / max) * 100}%` }} />
+                <em style={{ left: `${(goal / max) * 100}%` }} />
+              </span>
+              <b>{fmt(w.pct, 1)}%</b>
+              <span class={`week-delta ${w.delta == null || Math.abs(w.delta) < 0.05 ? '' : w.delta > 0 ? 'up' : 'down'}`}>
+                {w.delta == null ? '' : `${w.delta > 0 ? '+' : w.delta < 0 ? '−' : '±'}${fmt(Math.abs(w.delta), 1)}`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }

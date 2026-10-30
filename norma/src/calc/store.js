@@ -1,4 +1,5 @@
-// Сховище калькулятора: лише localStorage цього браузера. Нічого не надсилається.
+// Памʼять браузера (localStorage): миттєвий кеш і єдине сховище поза claude.ai.
+// У claude.ai дані додатково лежать в особистому розділі акаунта — див. cloud.js.
 import { DEFAULT_SETTINGS, newKey, normalizeSettings, num, shiftLength } from './model.js';
 
 const K = {

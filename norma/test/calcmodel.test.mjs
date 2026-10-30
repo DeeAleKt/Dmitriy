@@ -200,3 +200,104 @@ test('підписи хвилин', () => {
   assert.equal(minutesLabel(90), '1,5 год');
   assert.equal(minutesLabel(240), '4 год');
 });
+
+// ---------- тенденції та висновки ----------
+import { compareDay, monthPlan, movingAvg, openDayOf, rankInMonth, trendOf, weeksOf } from '../src/calc/model.js';
+
+const rec = (date, qty, patch = {}) => ({ ...day({ date, products: [{ name: 'А', norm: 35, qty }] }), base: 420, ...patch });
+
+test('тенденція: зростання, спад, стабільно', () => {
+  const up = summarize([30, 31, 32, 33, 34, 35, 36].map((q, i) => rec(`2026-10-${String(5 + i).padStart(2, '0')}`, q))).days;
+  const t = trendOf(up);
+  assert.equal(t.dir, 'up');
+  close(t.slope, (1 / 35) * 100, 1e-9); // +1 шт щодня = +2,857%
+  assert.equal(trendOf(up.slice(0, 4)), null); // мало даних
+  const flat = summarize([35, 35, 35, 35, 35].map((q, i) => rec(`2026-10-0${5 + i}`, q))).days;
+  assert.equal(trendOf(flat).dir, 'flat');
+  const down = summarize([40, 38, 36, 34, 32].map((q, i) => rec(`2026-10-0${5 + i}`, q))).days;
+  assert.equal(trendOf(down).dir, 'down');
+});
+
+test('ковзне середнє і тижні', () => {
+  // пн–пт 5–9 жовтня і пн–вт 12–13 жовтня — два тижні
+  const dates = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-12', '2026-10-13'];
+  const items = summarize([35, 35, 0, 35, 35, 42, 42].map((q, i) => rec(dates[i], q))).days;
+  const ma = movingAvg(items, 3);
+  close(ma[0], 100);
+  close(ma[2], 200 / 3);
+  const w = weeksOf(items);
+  assert.equal(w.length, 2);
+  assert.equal(w[0].n, 5);
+  close(w[0].pct, 80);
+  close(w[1].pct, 120);
+  close(w[1].delta, 40);
+  assert.equal(w[0].delta, null);
+});
+
+test('план місяця: скільки треба в решту днів', () => {
+  // 1–29 жовтня: 20 записів по 90 %; сьогодні 30-те (пт), лишається 30 і (не) 31 (сб)
+  const days = {};
+  let k = 0;
+  for (let d = 1; d <= 29 && k < 20; d++) {
+    const iso = `2026-10-${String(d).padStart(2, '0')}`;
+    const wd = new Date(2026, 9, d).getDay();
+    if (wd === 0 || wd === 6) continue;
+    days[iso] = rec(iso, 31.5); // 90 %
+    k++;
+  }
+  const p = monthPlan(days, '2026-10-30', 100);
+  assert.equal(p.rest, 1);
+  // 20 днів × 420 × 0,9 = 7560; треба (21 × 420) = 8820 → 1260 нормо-хв за 420 → 300 %
+  close(p.needPct, 300);
+  assert.equal(p.done, false);
+  const good = Object.fromEntries(Object.keys(days).map((d) => [d, rec(d, 42)])); // 120 %
+  assert.equal(monthPlan(good, '2026-10-30', 100).done, true);
+  // сьогоднішня зміна ще триває: її неповний запис не рахується, а день лишається в плані
+  const open = monthPlan({ ...days, '2026-10-30': rec('2026-10-30', 5) }, '2026-10-30', 100, '2026-10-30');
+  assert.equal(open.rest, 1);
+  close(open.needPct, 300);
+});
+
+test('openDayOf: день не остаточний, поки зміна триває', () => {
+  const days = { '2026-10-30': rec('2026-10-30', 20) }; // 6:30–14:30
+  assert.equal(openDayOf(days, '2026-10-30', new Date(2026, 9, 30, 10, 0)), '2026-10-30');
+  assert.equal(openDayOf(days, '2026-10-30', new Date(2026, 9, 30, 15, 0)), null);
+  assert.equal(openDayOf({}, '2026-10-30', new Date(2026, 9, 30, 10, 0)), null);
+});
+
+test('порівняння дня і місце в місяці', () => {
+  const days = { '2026-10-26': rec('2026-10-26', 35), '2026-10-27': rec('2026-10-27', 42), '2026-10-28': rec('2026-10-28', 28) };
+  const c = compareDay(days, '2026-10-28', 100);
+  close(c.prev.pct, 120);
+  close(c.avg30.pct, 110);
+  close(c.best.pct, 120);
+  assert.deepEqual(rankInMonth(days, '2026-10-27'), { place: 1, of: 3 });
+  assert.deepEqual(rankInMonth(days, '2026-10-28'), { place: 3, of: 3 });
+});
+
+test('серія не обривається незавершеним сьогоднішнім днем', () => {
+  const days = { '2026-10-28': rec('2026-10-28', 35), '2026-10-29': rec('2026-10-29', 36), '2026-10-30': rec('2026-10-30', 10) };
+  assert.equal(streak(days, 100).cur, 0);
+  assert.equal(streak(days, 100, '2026-10-30').cur, 2);
+});
+
+test('зміни, вироби і втрати від простою', () => {
+  const s = summarize([
+    rec('2026-10-05', 35, { shiftName: '1 зміна' }),
+    rec('2026-10-06', 35, { shiftName: '1 зміна' }),
+    { ...rec('2026-10-07', 28, { shiftName: '2 зміна' }), downtime: [{ reason: 'Світло', min: 60 }] },
+    { ...rec('2026-10-08', 30, { shiftName: '2 зміна' }) },
+    { ...day({ date: '2026-10-09', products: [{ name: 'Б', norm: 70, qty: 77 }] }), base: 420, shiftName: '1 зміна' },
+    { ...day({ date: '2026-10-12', products: [{ name: 'Б', norm: 70, qty: 77 }] }), base: 420, shiftName: '1 зміна' },
+  ]);
+  assert.deepEqual(s.shifts.map((x) => x.name), ['1 зміна', '2 зміна']);
+  close(s.shifts[0].pct, 105);
+  assert.equal(s.perf[0].name, 'Б');
+  close(s.perf[0].pct, 110);
+  close(s.lostPieces, (60 * 35) / 420); // 5 шт
+  const facts = insights(s, null, 100, periodOf('month', '2026-10-30'), { trend: trendOf(s.days) });
+  const text = facts.map((f) => f.text).join(' | ');
+  assert.match(text, /Тенденція/);
+  assert.match(text, /недороблено ≈ 5 шт/);
+  assert.match(text, /Найкраще виходить «Б»/);
+});

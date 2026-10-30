@@ -1,6 +1,6 @@
 // Файли: Excel з історією, резервна копія і відновлення. Без мережі — лише збереження на пристрій.
 import { buildXlsx, excelDate, STYLE } from '../xlsx.js';
-import { today } from '../util.js';
+import { store, today } from '../util.js';
 import { computeDay, MONTHS_SHORT, normalizeSettings, summarize } from './model.js';
 
 const WD = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
@@ -83,9 +83,13 @@ export async function exportExcel(records, period, goal = 100) {
   return saveFile(name, new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 }
 
-export function backup(settings, days) {
+export const BACKUP_KEY = 'norma.v2.backup-at';
+
+export async function backup(settings, days) {
   const data = JSON.stringify({ app: 'norma-calc', v: 2, exportedAt: new Date().toISOString(), settings, days }, null, 1);
-  return saveFile(`norma-kopiya-${today()}.json`, data, 'application/json');
+  const r = await saveFile(`norma-kopiya-${today()}.json`, data, 'application/json');
+  if (r === 'saved') store(BACKUP_KEY, Date.now());
+  return r;
 }
 
 /** Розбір файлу резервної копії. Повертає { settings, days } або кидає зрозумілу помилку. */
