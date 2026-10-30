@@ -9,7 +9,8 @@ import {
   insights,
   level,
   makeSample,
-  monthPlan,
+  monthGoalOf,
+  monthStatus,
   MONTHS_SHORT,
   moveAnchor,
   movingAvg,
@@ -22,6 +23,7 @@ import {
   weeksOf,
   WEEKDAYS_SHORT,
 } from './model.js';
+import { Hints, monthHints, MonthGoalSheet } from './Month.jsx';
 import { CardHead, Empty, Icon, Segmented, toast } from './ui.jsx';
 
 const MODES = [
@@ -32,7 +34,8 @@ const MODES = [
 const MODE_WORD = { week: 'тиждень', month: 'місяць', year: 'рік' };
 
 export function Stats() {
-  const { settings, days, setDays, openDay, switchDate, openSettings } = useApp();
+  const { settings, setSettings, days, setDays, openDay, switchDate, openSettings } = useApp();
+  const [goalSheet, setGoalSheet] = useState(false);
   const [mode, setMode] = useState('month');
   const [anchor, setAnchor] = useState(today());
   const goal = settings.goal;
@@ -48,9 +51,12 @@ export function Stats() {
   const st = useMemo(() => streak(days, goal, open), [days, goal, open]);
   const best = useMemo(() => bestDay(days), [days]);
   const trend = useMemo(() => trendOf(cur.days.filter((d) => d.date !== open)), [cur, open]);
-  const facts = useMemo(
-    () => insights(cur, prev, goal, period, { trend, plan: mode === 'month' && isCurrent ? monthPlan(days, t, goal, open) : null }),
-    [cur, prev, goal, period.label, trend, days, open],
+  const facts = useMemo(() => insights(cur, prev, goal, period, { trend }), [cur, prev, goal, period.label, trend]);
+  // мета календарного місяця: середнє з 1-го числа, скільки бракує, скільки треба в решту днів
+  const month = period.from.slice(0, 7);
+  const mstat = useMemo(
+    () => (mode === 'month' && month <= t.slice(0, 7) ? monthStatus(days, month, t, monthGoalOf(settings, month), settings.workdays, isCurrent ? open : null) : null),
+    [mode, month, days, settings, t, isCurrent, open],
   );
   // ковзне середнє з запасом днів до початку періоду, щоб лінія не «стрибала» на початку
   const ma = useMemo(() => {
@@ -126,7 +132,7 @@ export function Stats() {
             </section>
           ) : (
             <>
-              <Summary cur={cur} prev={prev} goal={goal} mode={mode} />
+              <Summary cur={cur} prev={prev} goal={mstat ? mstat.goal : goal} mode={mode} mstat={mstat} live={isCurrent && open} onGoal={() => setGoalSheet(true)} />
 
               <div class="tiles">
                 <Tile icon="flame" tone="warn" label="Серія зараз" value={`${st.cur}`} unit={plural(st.cur, ['день', 'дні', 'днів'])} sub={st.best > st.cur ? `найдовша — ${st.best}` : 'поспіль з нормою'} />
@@ -180,6 +186,8 @@ export function Stats() {
               {cur.other.length > 0 && <Reasons title="Інші роботи" icon="wrench" tone="teal" items={cur.other} />}
               {cur.products.length > 0 && <Products items={cur.products} />}
 
+              {goalSheet && <MonthGoalSheet month={month} days={days} settings={settings} setSettings={setSettings} todayISO={t} onClose={() => setGoalSheet(false)} />}
+
               <button
                 class="btn soft block"
                 onClick={() =>
@@ -196,9 +204,12 @@ export function Stats() {
   );
 }
 
-function Summary({ cur, prev, goal, mode }) {
-  const lv = level(cur.pct, goal);
-  const delta = prev.n >= 1 ? cur.pct - prev.pct : null;
+function Summary({ cur, prev, goal, mode, mstat, live, onGoal }) {
+  // за місяць — середнє з 1-го числа без сьогоднішньої зміни, що ще триває
+  const pct = mstat?.n ? mstat.pct : cur.pct;
+  const n = mstat?.n ? mstat.n : cur.n;
+  const lv = level(pct, goal);
+  const delta = prev.n >= 1 ? pct - prev.pct : null;
   const scale = 150;
   return (
     <section class={`card summary lv-${lv}`}>
@@ -212,17 +223,25 @@ function Summary({ cur, prev, goal, mode }) {
           </span>
         )}
       </div>
-      <div class={`sum-num lv-text ${lv}`}>
-        {fmt(cur.pct, 1)}
-        <small>%</small>
+      <div class="sum-row">
+        <div class={`sum-num lv-text ${lv}`}>
+          {fmt(pct, 1)}
+          <small>%</small>
+        </div>
+        {mstat && (
+          <button class="goal-btn" onClick={onGoal} aria-label="Змінити мету на місяць">
+            мета {fmt(mstat.goal, 0)}% <Icon name="pencil" size={13} />
+          </button>
+        )}
       </div>
       <div class="sum-bar">
-        <i class={`lv-${lv}`} style={{ width: `${Math.min(100, (cur.pct / scale) * 100)}%` }} />
+        <i class={`lv-${lv}`} style={{ width: `${Math.min(100, (pct / scale) * 100)}%` }} />
         <em style={{ left: `${(goal / scale) * 100}%` }} />
       </div>
       <div class="sum-facts">
         <span>
-          <b>{cur.n}</b> {plural(cur.n, ['день', 'дні', 'днів'])}
+          <b>{n}</b> {plural(n, ['день', 'дні', 'днів'])}
+          {mstat?.n > 0 && live ? ' без сьогодні' : ''}
         </span>
         <span>
           робочий час <b>{fmtMin(cur.avail)}</b>
@@ -233,6 +252,11 @@ function Summary({ cur, prev, goal, mode }) {
           </span>
         )}
       </div>
+      {mstat && (
+        <div class="sum-hints">
+          <Hints items={monthHints(mstat)} />
+        </div>
+      )}
     </section>
   );
 }

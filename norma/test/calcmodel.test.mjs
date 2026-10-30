@@ -202,7 +202,7 @@ test('підписи хвилин', () => {
 });
 
 // ---------- тенденції та висновки ----------
-import { compareDay, monthPlan, movingAvg, openDayOf, rankInMonth, trendOf, weeksOf } from '../src/calc/model.js';
+import { compareDay, monthGoalOf, monthPlan, monthStatus, movingAvg, openDayOf, rankInMonth, trendOf, weeksOf, withDay } from '../src/calc/model.js';
 
 const rec = (date, qty, patch = {}) => ({ ...day({ date, products: [{ name: 'А', norm: 35, qty }] }), base: 420, ...patch });
 
@@ -300,4 +300,69 @@ test('зміни, вироби і втрати від простою', () => {
   assert.match(text, /Тенденція/);
   assert.match(text, /недороблено ≈ 5 шт/);
   assert.match(text, /Найкраще виходить «Б»/);
+});
+
+test('мета на місяць: окрема → загальна → особиста', () => {
+  const s = normalizeSettings({ goal: 100, monthGoal: 105, monthGoals: { '2026-10': 110, bad: 120, '2026-11': 999 } });
+  assert.deepEqual(s.monthGoals, { '2026-10': 110 });
+  assert.equal(monthGoalOf(s, '2026-10'), 110);
+  assert.equal(monthGoalOf(s, '2026-09'), 105);
+  assert.equal(monthGoalOf(normalizeSettings({ goal: 95 }), '2026-09'), 95);
+  assert.deepEqual(normalizeSettings({}).workdays, [1, 2, 3, 4, 5]);
+  assert.deepEqual(normalizeSettings({ workdays: [6, 1, 1, 9] }).workdays, [1, 6]);
+});
+
+test('стан місяця: календарний місяць, нестача до мети, план на решту днів', () => {
+  // 1–29 жовтня: 20 робочих днів по 90 % (як у тесті плану), сьогодні 30-те (пт)
+  const days = {};
+  for (let d = 1, k = 0; d <= 29 && k < 20; d++) {
+    const wd = new Date(2026, 9, d).getDay();
+    if (wd === 0 || wd === 6) continue;
+    const iso = `2026-10-${String(d).padStart(2, '0')}`;
+    days[iso] = rec(iso, 31.5);
+    k++;
+  }
+  days['2026-09-30'] = rec('2026-09-30', 70); // інший місяць — не рахується
+  const m = monthStatus(days, '2026-10', '2026-10-30', 95);
+  assert.equal(m.n, 20);
+  close(m.pct, 90);
+  close(m.short, 0.05 * 20 * 420); // 5 % від 8400 хв = 420 нормо-хв
+  assert.equal(m.rest, 1);
+  close(m.needPct, 195); // (0,95 × 8820 − 7560) / 420
+  // робоча субота теж рахується в решті
+  assert.equal(monthStatus(days, '2026-10', '2026-10-30', 95, [1, 2, 3, 4, 5, 6]).rest, 2);
+  // сьогоднішня зміна, що триває: не в середньому, але в решті; «з сьогоднішнім днем»
+  const open = { ...days, '2026-10-30': rec('2026-10-30', 35) };
+  const mo = monthStatus(open, '2026-10', '2026-10-30', 95, [1, 2, 3, 4, 5], '2026-10-30');
+  assert.equal(mo.n, 20);
+  assert.equal(mo.rest, 1);
+  close(withDay(mo, computeDay(open['2026-10-30'], 420)), ((7560 + 420) / 8820) * 100);
+  // минулий місяць закрито
+  const past = monthStatus(days, '2026-10', '2026-11-05', 95);
+  assert.equal(past.closed, true);
+  assert.equal(past.rest, 0);
+  assert.equal(past.reached, false);
+  // новий місяць без записів: треба просто тримати мету
+  const fresh = monthStatus(days, '2026-11', '2026-11-02', 105);
+  assert.equal(fresh.n, 0);
+  assert.equal(fresh.needPct, 105);
+});
+
+test('новий день: зміна з попереднього, а вхід і вихід — за графіком', async () => {
+  const { newDraft } = await import('../src/calc/store.js');
+  const settings = normalizeSettings({});
+  const prev = { ...rec('2026-10-29', 30), shiftName: '1 зміна', start: '06:40', end: '14:15', brk: 60 };
+  const d = newDraft('2026-10-30', settings, { '2026-10-29': prev });
+  assert.equal(d.shiftName, '1 зміна');
+  assert.equal(d.start, '06:30');
+  assert.equal(d.end, '14:30');
+  // свій час без графіка — береться як був
+  const own = newDraft('2026-10-30', settings, { '2026-10-29': { ...prev, shiftName: '' } });
+  assert.equal(own.start, '06:40');
+  assert.equal(own.end, '14:15');
+  // вхід 6:30, вихід 14:15, перерва 1 год → 6 год 45 хв, норма 35 шт → 33,75 шт на день
+  const c = computeDay({ ...prev, start: '06:30', end: '14:15' }, 420);
+  assert.equal(c.shiftMin, 465);
+  assert.equal(c.workMin, 405);
+  close(c.lines[0].dayNorm, 33.75);
 });

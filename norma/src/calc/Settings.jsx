@@ -6,6 +6,16 @@ import { DEFAULT_DOWN, DEFAULT_OTHER, makeSample, newKey, num, shiftLength } fro
 import { ask, cleanNum, Icon, Segmented, Sheet, toast, Toggle } from './ui.jsx';
 import { today } from '../util.js';
 
+const WD = [
+  [1, 'Пн'],
+  [2, 'Вт'],
+  [3, 'Ср'],
+  [4, 'Чт'],
+  [5, 'Пт'],
+  [6, 'Сб'],
+  [0, 'Нд'],
+];
+
 export function Settings({ onClose }) {
   const { settings, setSettings, days, setDays, sync, wipeAll } = useApp();
   const cloud = sync.mode === 'cloud';
@@ -64,6 +74,36 @@ export function Settings({ onClose }) {
             <span class="hint">Кольори, серії та «до мети ще…» рахуються від неї</span>
           </div>
           <MiniStepper value={settings.goal} step={5} min={50} max={200} suffix="%" onChange={(v) => set({ goal: v })} />
+        </div>
+        <div class="srow-static">
+          <div>
+            <b>Мета на місяць</b>
+            <span class="hint">Середнє за календарний місяць</span>
+          </div>
+          <MiniStepper value={settings.monthGoal ?? settings.goal} step={5} min={50} max={200} suffix="%" onChange={(v) => set({ monthGoal: v })} />
+        </div>
+        <div class="srow-col">
+          <div>
+            <b>Робочі дні</b>
+            <span class="hint">Щоб рахувати, скільки днів лишилось до кінця місяця</span>
+          </div>
+          <div class="wdays">
+            {WD.map(([d, l]) => {
+              const on = settings.workdays.includes(d);
+              return (
+                <button
+                  class={`wday ${on ? 'on' : ''}`}
+                  aria-pressed={on}
+                  onClick={() => {
+                    const next = on ? settings.workdays.filter((x) => x !== d) : [...settings.workdays, d].sort();
+                    if (next.length) set({ workdays: next });
+                  }}
+                >
+                  {l}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div class="srow-static">
           <div>

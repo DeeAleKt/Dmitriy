@@ -58,7 +58,8 @@ export function draftFromRecord(r) {
 
 /**
  * Нова чернетка на дату: зміна і вироби — як в останній збережений день перед нею
- * (кількості порожні), бо зазвичай роблять те саме.
+ * (кількості порожні), бо зазвичай роблять те саме. Вхід і вихід — за графіком цієї зміни,
+ * а не фактичні вчорашні: їх працівник поправить сам.
  */
 export function newDraft(date, settings, days) {
   const prevDate = Object.keys(days)
@@ -66,13 +67,15 @@ export function newDraft(date, settings, days) {
     .sort()
     .pop();
   const prev = prevDate ? days[prevDate] : null;
-  const shift = settings.shifts[0] || { name: '', start: '08:00', end: '16:00', brk: 60 };
+  const preset = prev && settings.shifts.find((s) => s.name === prev.shiftName);
+  const shift = preset || (prev ? null : settings.shifts[0]) || { name: '', start: '08:00', end: '16:00', brk: 60 };
+  const src = preset || !prev ? shift : prev;
   return {
     date,
     shiftName: prev ? prev.shiftName : shift.name,
-    start: prev ? prev.start : shift.start,
-    end: prev ? prev.end : shift.end,
-    brk: prev ? prev.brk : shift.brk,
+    start: src.start,
+    end: src.end,
+    brk: src.brk,
     products: prev?.products?.length
       ? prev.products.map((p) => ({ key: newKey(), name: p.name || '', norm: str(p.norm), qty: '' }))
       : [{ key: newKey(), name: '', norm: '', qty: '' }],

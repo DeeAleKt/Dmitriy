@@ -39,10 +39,15 @@ export const DEFAULT_OTHER = [
 export const DOWN_MINUTES = [5, 10, 15, 20, 30, 45, 60, 90, 120];
 export const OTHER_MINUTES = [15, 30, 45, 60, 90, 120, 180, 240];
 
+export const WORKDAYS = [1, 2, 3, 4, 5]; // пн–пт, як у Date.getDay()
+
 export const DEFAULT_SETTINGS = {
   v: 2,
   base: 420,
   goal: 100,
+  monthGoal: null, // загальна мета на місяць (null — як особиста мета)
+  monthGoals: {}, // окрема мета на конкретний місяць: { 'РРРР-ММ': % }
+  workdays: WORKDAYS,
   shifts: DEFAULT_SHIFTS,
   products: [],
   downReasons: DEFAULT_DOWN,
@@ -66,12 +71,23 @@ export function normalizeSettings(s) {
   const d = DEFAULT_SETTINGS;
   const list = (v, def) =>
     Array.isArray(v) ? [...new Set(v.map((x) => String(x || '').trim()).filter(Boolean))] : def;
+  const pctOf = (v) => {
+    const n = parseNum(v);
+    return n >= 50 && n <= 200 ? Math.round(n * 10) / 10 : null;
+  };
   const goal = parseNum(s?.goal);
   const base = parseNum(s?.base);
+  const monthGoals = {};
+  for (const [m, v] of Object.entries(s?.monthGoals && typeof s.monthGoals === 'object' ? s.monthGoals : {}))
+    if (/^\d{4}-\d{2}$/.test(m) && pctOf(v) != null) monthGoals[m] = pctOf(v);
+  const workdays = Array.isArray(s?.workdays) ? [...new Set(s.workdays.map(Number).filter((x) => x >= 0 && x <= 6))].sort() : d.workdays;
   return {
     v: 2,
     base: base > 0 && base <= 1440 ? Math.round(base) : d.base,
     goal: goal >= 50 && goal <= 200 ? Math.round(goal) : d.goal,
+    monthGoal: pctOf(s?.monthGoal),
+    monthGoals,
+    workdays: workdays.length ? workdays : d.workdays,
     shifts: Array.isArray(s?.shifts)
       ? s.shifts
           .filter((x) => x && shiftLength(x.start, x.end) > 0)
@@ -393,22 +409,48 @@ export function openDayOf(days, todayISO, now = new Date()) {
   const p = paceAt(r, computeDay(r, r.base || 420), now);
   return p && p.state !== 'after' ? todayISO : null;
 }
-export function monthPlan(days, todayISO, goal, openDate = null) {
-  const { from, to } = monthRange(todayISO);
+/** Мета на місяць: окрема для цього місяця → загальна місячна → особиста. */
+export const monthGoalOf = (settings, month) => settings.monthGoals?.[month] ?? settings.monthGoal ?? settings.goal;
+
+/**
+ * Календарний місяць (з 1-го числа, а не «останні 30 днів»): середнє, зважене за робочим часом,
+ * скільки нормо-хвилин бракує до мети і скільки треба в середньому в решту робочих днів.
+ * openDate — сьогоднішня зміна, що ще триває: її неповний результат не рахується, а сам день — у решті.
+ */
+export function monthStatus(days, month, todayISO, goal, workdays = WORKDAYS, openDate = null) {
+  const { from, to } = monthRange(`${month}-01`);
   const s = summarize(
     recordsIn(days, from, to).filter((r) => r.date !== openDate),
     goal,
   );
-  if (!s.n) return null;
   let rest = 0;
-  for (let d = todayISO; d <= to; d = addDays(d, 1)) {
-    const wd = fromISO(d).getDay();
-    if (wd !== 0 && wd !== 6 && (!days[d] || d === openDate)) rest++;
-  }
-  const avgAvail = s.avail / s.n;
-  if (!rest) return { rest, pct: s.pct, done: s.pct >= goal - 0.05 };
-  const need = ((goal / 100) * (s.avail + rest * avgAvail) - s.earned) / (rest * avgAvail);
-  return { rest, pct: s.pct, needPct: need * 100, done: need <= 0 };
+  for (let d = todayISO > from ? todayISO : from; d <= to; d = addDays(d, 1))
+    if ((workdays.includes(fromISO(d).getDay()) && !days[d]) || d === openDate) rest++; // сьогоднішня зміна — завжди в решті
+  const avgAvail = s.n ? s.avail / s.n : null;
+  let needPct = null;
+  if (rest > 0) needPct = s.n ? (((goal / 100) * (s.avail + rest * avgAvail) - s.earned) / (rest * avgAvail)) * 100 : goal;
+  return {
+    month,
+    goal,
+    n: s.n,
+    pct: s.n ? s.pct : null,
+    earned: s.earned,
+    avail: s.avail,
+    short: (goal / 100) * s.avail - s.earned, // нормо-хв до мети; відʼємне — запас
+    rest,
+    needPct,
+    reached: s.n > 0 && s.pct >= goal - 0.05,
+    closed: todayISO > to,
+  };
+}
+
+/** Середнє місяця разом із ще не завершеним сьогоднішнім днем. */
+export const withDay = (m, res) => (res?.valid && m.avail + res.avail > 0 ? ((m.earned + res.earned) / (m.avail + res.avail)) * 100 : m.pct);
+
+export function monthPlan(days, todayISO, goal, openDate = null, workdays = WORKDAYS) {
+  const m = monthStatus(days, todayISO.slice(0, 7), todayISO, goal, workdays, openDate);
+  if (!m.n) return null;
+  return { ...m, done: m.needPct == null ? m.reached : m.needPct <= 0 };
 }
 
 /** Порівняння одного дня з попереднім записом, середнім за 30 днів і рекордом. */
@@ -490,10 +532,12 @@ export function insights(cur, prev, goal, period, extra = {}) {
   }
   const plan = extra.plan;
   if (plan && plan.rest > 0) {
+    const g = plan.goal ?? goal;
     const days = `${plan.rest} ${plural(plan.rest, ['робочий день', 'робочі дні', 'робочих днів'])}`;
-    if (plan.done) out.push({ icon: 'sparkle', tone: 'good', text: `Місяць уже виходить на ${goal}% — у решту ${days} достатньо тримати рівень` });
-    else if (plan.needPct > 150) out.push({ icon: 'target', tone: 'bad', text: `Щоб закрити місяць на ${goal}%, у решту ${days} треба понад 150% — мета місяця навряд досяжна` });
-    else out.push({ icon: 'target', tone: plan.needPct > 110 ? 'warn' : 'muted', text: `Щоб закрити місяць на ${goal}%, у решту ${days} треба в середньому ${fmt(plan.needPct, 0)}%` });
+    if (plan.done) out.push({ icon: 'sparkle', tone: 'good', text: `Мету місяця ${fmt(g, 0)}% уже забезпечено — навіть із запасом` });
+    else if (plan.needPct <= plan.pct) out.push({ icon: 'sparkle', tone: 'good', text: `Місяць виходить на мету ${fmt(g, 0)}%: у решту ${days} достатньо в середньому ${fmt(plan.needPct, 0)}%` });
+    else if (plan.needPct > 150) out.push({ icon: 'target', tone: 'bad', text: `Щоб закрити місяць на ${fmt(g, 0)}%, у решту ${days} треба понад 150% — мета місяця навряд досяжна` });
+    else out.push({ icon: 'target', tone: plan.needPct > 110 ? 'warn' : 'muted', text: `Щоб закрити місяць на ${fmt(g, 0)}%, у решту ${days} треба в середньому ${fmt(plan.needPct, 0)}%` });
   }
   if (prev && prev.n >= 2 && cur.n >= 2) {
     const d = cur.pct - prev.pct;

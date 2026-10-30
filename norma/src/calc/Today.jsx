@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { addDays, fmt, fmtHM, fmtMin, fmtTime, fromISO, plural, store, today } from '../util.js';
+import { addDays, fmt, fmtHM, fmtMin, fmtTime, fromISO, pad, plural, store, today } from '../util.js';
 import { useApp, useNow } from './ctx.js';
 import { backup, BACKUP_KEY } from './files.js';
 import { buzz, confetti } from './fx.js';
 import { Gauge } from './Gauge.jsx';
+import { MonthCard, MonthGoalSheet } from './Month.jsx';
 import {
   bestDay,
   compareDay,
@@ -43,7 +44,7 @@ function dateTitle(iso) {
 export function summaryText(day, res) {
   const d = fromISO(day.date);
   const lines = [
-    `${WEEKDAYS[d.getDay()].charAt(0).toUpperCase() + WEEKDAYS[d.getDay()].slice(1)}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()]} · ${day.shiftName || 'зміна'} ${fmtTime(day.start)}–${fmtTime(day.end)}`,
+    `${WEEKDAYS[d.getDay()].charAt(0).toUpperCase() + WEEKDAYS[d.getDay()].slice(1)}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()]} · ${day.shiftName || 'зміна'}: вхід ${fmtTime(day.start)}, вихід ${fmtTime(day.end)}`,
   ];
   for (const l of res.active) lines.push(`${l.name || 'Виріб'}: ${fmt(l.qty)} шт (норма ${fmt(l.norm)} за зміну)`);
   for (const x of day.downtime || []) lines.push(`Простій: ${x.reason} — ${fmtMin(num(x.min))}`);
@@ -269,22 +270,7 @@ export function Today() {
 
       <BackupNudge mode={sync.mode} settings={settings} days={days} />
 
-      <button class="card shift-card" onClick={() => setSheet({ type: 'shift' })}>
-        <span class="head-ico">
-          <Icon name="clock" size={17} />
-        </span>
-        <span class="shift-main">
-          <b>{draft.shiftName || 'Свій час'}</b>
-          <small>
-            {fmtTime(draft.start)}–{fmtTime(draft.end)} · перерва {fmtMin(num(draft.brk))}
-          </small>
-        </span>
-        <span class="shift-work">
-          <b>{res.workMin > 0 ? fmtMin(res.workMin) : '—'}</b>
-          <small>роботи</small>
-        </span>
-        <Icon name="right" size={18} class="faint" />
-      </button>
+      <ShiftCard draft={draft} res={res} settings={settings} isToday={isToday} now={now} onPatch={patch} onOpen={() => setSheet({ type: 'shift' })} />
 
       <section class="card">
         <CardHead icon="box" title="Вироби" aside={res.pieces > 0 ? `${fmt(res.pieces)} шт` : null} />
@@ -337,6 +323,8 @@ export function Today() {
         onRemove={(key) => setDraft((d) => ({ ...d, others: d.others.filter((x) => x.key !== key) }))}
       />
 
+      {isToday && <MonthCard days={days} settings={settings} date={draft.date} res={res} onGoal={() => setSheet({ type: 'mgoal' })} />}
+
       <DayContext days={days} date={draft.date} record={record} res={res} goal={goal} isToday={isToday} />
 
       {!blank && (
@@ -364,6 +352,9 @@ export function Today() {
         >
           <Breakdown day={draft} res={res} base={base} />
         </Sheet>
+      )}
+      {sheet?.type === 'mgoal' && (
+        <MonthGoalSheet month={draft.date.slice(0, 7)} days={days} settings={settings} setSettings={setSettings} todayISO={today()} onClose={() => setSheet(null)} />
       )}
       {sheet?.type === 'sync' && <SyncSheet sync={sync} settings={settings} days={days} onClose={() => setSheet(null)} />}
       {sheet?.type === 'shift' && (
@@ -405,6 +396,68 @@ export function Today() {
           }}
           onClose={() => setSheet(null)}
         />
+      )}
+    </div>
+  );
+}
+
+// ---------- Зміна: вхід і вихід ----------
+
+const nowHM = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+function ShiftCard({ draft, res, settings, isToday, now, onPatch, onOpen }) {
+  const preset = settings.shifts.find((s) => s.name === draft.shiftName);
+  const planned = preset ? shiftLength(preset.start, preset.end) : null;
+  const diff = planned != null && res.shiftMin > 0 ? res.shiftMin - planned : 0;
+  const single = res.valid && res.active.length === 1 && res.otherMin === 0 ? res.active[0] : null;
+  const dPieces = single && diff ? (single.norm * Math.abs(diff)) / settings.base : 0;
+  const t = nowHM(now);
+  return (
+    <section class="card shiftbox">
+      <button class="shift-top" onClick={onOpen}>
+        <span class="head-ico">
+          <Icon name="clock" size={17} />
+        </span>
+        <span class="shift-main">
+          <b>{draft.shiftName || 'Свій час'}</b>
+          <small>
+            {preset ? `графік ${fmtTime(preset.start)}–${fmtTime(preset.end)} · ` : ''}перерва {fmtMin(num(draft.brk))}
+          </small>
+        </span>
+        <span class="shift-work">
+          <b>{res.workMin > 0 ? fmtMin(res.workMin) : '—'}</b>
+          <small>роботи</small>
+        </span>
+        <Icon name="right" size={18} class="faint" />
+      </button>
+      <div class="punch">
+        <PunchBox label="Вхід" value={draft.start} now={isToday && draft.start !== t ? t : null} onChange={(v) => onPatch({ start: v })} />
+        <PunchBox label="Вихід" value={draft.end} now={isToday && draft.end !== t ? t : null} onChange={(v) => onPatch({ end: v })} />
+      </div>
+      {diff !== 0 && (
+        <p class={`punch-note ${diff < 0 ? 'less' : 'more'}`}>
+          <Icon name={diff < 0 ? 'down2' : 'up'} size={15} />
+          <span>
+            {diff < 0 ? `На ${fmtMin(-diff)} менше` : `На ${fmtMin(diff)} більше`} за графік — норма на день {diff < 0 ? 'менша' : 'більша'}
+            {dPieces >= 0.05 ? ` на ${fmt(dPieces)} шт` : ''}
+          </span>
+        </p>
+      )}
+    </section>
+  );
+}
+
+function PunchBox({ label, value, now, onChange }) {
+  return (
+    <div class="punch-box">
+      <label>
+        <span class="punch-label">{label}</span>
+        <input type="time" step="60" value={value} aria-label={`${label}, час`} onChange={(e) => e.currentTarget.value && onChange(e.currentTarget.value)} />
+      </label>
+      {now && (
+        <button class="punch-now" onClick={() => onChange(now)} aria-label={`${label} — зараз, ${fmtTime(now)}`}>
+          зараз
+        </button>
       )}
     </div>
   );
@@ -919,12 +972,9 @@ function TimeSheet({ kind, item, draft, base, settings, setSettings, onSave, onD
 function ShiftSheet({ draft, res, settings, setSettings, onApply, onClose }) {
   const [naming, setNaming] = useState(false);
   const [newName, setNewName] = useState('');
-  const match = settings.shifts.find((s) => s.start === draft.start && s.end === draft.end && s.brk === num(draft.brk));
-  const setTime = (p) => {
-    const next = { ...draft, ...p };
-    const preset = settings.shifts.find((s) => s.start === next.start && s.end === next.end);
-    onApply({ ...p, shiftName: preset ? preset.name : '' });
-  };
+  const match = settings.shifts.find((s) => s.name === draft.shiftName);
+  // вхід і вихід — фактичні (по прохідній); назва зміни лишається, бо від неї перерва і статистика за змінами
+  const setTime = (p) => onApply(p);
   function saveAsPreset() {
     const name = newName.trim();
     if (!name) return;
@@ -935,7 +985,7 @@ function ShiftSheet({ draft, res, settings, setSettings, onApply, onClose }) {
   return (
     <Sheet
       title="Зміна"
-      sub="Оберіть зміну або вкажіть свій час"
+      sub="Від зміни — перерва; вхід і вихід вказуєте фактичні"
       onClose={onClose}
       tall
       footer={
@@ -946,7 +996,7 @@ function ShiftSheet({ draft, res, settings, setSettings, onApply, onClose }) {
     >
       <div class="presets">
         {settings.shifts.map((s) => {
-          const on = s.start === draft.start && s.end === draft.end && s.brk === num(draft.brk);
+          const on = s.name === draft.shiftName;
           return (
             <button
               class={`preset ${on ? 'on' : ''}`}
@@ -967,16 +1017,24 @@ function ShiftSheet({ draft, res, settings, setSettings, onApply, onClose }) {
             </button>
           );
         })}
+        <button class={`preset ${!match ? 'on' : ''}`} onClick={() => onApply({ shiftName: '' })}>
+          <span class="preset-main">
+            <b>Свій час</b>
+            <small>Без графіка — лише вхід, вихід і перерва</small>
+          </span>
+          <span class="preset-work" />
+          <span class="preset-check">{!match && <Icon name="check" size={18} />}</span>
+        </button>
       </div>
 
-      <div class="sec-label">Свій час на цей день</div>
+      <div class="sec-label">Вхід і вихід по прохідній</div>
       <div class="grid2">
         <label class="field">
-          <span class="field-label">Початок</span>
+          <span class="field-label">Вхід</span>
           <input class="input time" type="time" step="300" value={draft.start} onChange={(e) => e.currentTarget.value && setTime({ start: e.currentTarget.value })} />
         </label>
         <label class="field">
-          <span class="field-label">Кінець</span>
+          <span class="field-label">Вихід</span>
           <input class="input time" type="time" step="300" value={draft.end} onChange={(e) => e.currentTarget.value && setTime({ end: e.currentTarget.value })} />
         </label>
       </div>
@@ -998,6 +1056,11 @@ function ShiftSheet({ draft, res, settings, setSettings, onApply, onClose }) {
       </div>
       {res.shiftMin > 0 && toMinutesSafe(draft.end) <= toMinutesSafe(draft.start) && <p class="hint">Зміна переходить через північ — це враховано.</p>}
 
+      {match && (match.start !== draft.start || match.end !== draft.end) && (
+        <p class="hint">
+          За графіком «{match.name}» {fmtTime(match.start)}–{fmtTime(match.end)}. Рахується фактичний час: {fmtTime(draft.start)}–{fmtTime(draft.end)}.
+        </p>
+      )}
       {!match && res.workMin > 0 && !naming && (
         <button class="link" onClick={() => setNaming(true)}>
           <Icon name="bookmark" size={16} /> Зберегти цей час як нову зміну
@@ -1145,7 +1208,7 @@ export function Breakdown({ day, res, base }) {
         </div>
         <div class="bd-row">
           <span>
-            Зміна {fmtTime(day.start)}–{fmtTime(day.end)}
+            Вхід {fmtTime(day.start)} → вихід {fmtTime(day.end)}
           </span>
           <b>{fmtMin(res.shiftMin)}</b>
         </div>

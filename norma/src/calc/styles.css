@@ -809,6 +809,233 @@ input::placeholder {
   transform: scale(0.99);
 }
 
+/* ---------- Зміна: вхід і вихід ---------- */
+.shiftbox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 14px;
+}
+.shift-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+.shift-top:active {
+  opacity: 0.75;
+}
+.punch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.punch-box {
+  position: relative;
+  min-width: 0;
+  border-radius: 16px;
+  background: var(--surface-2);
+  border: 1.5px solid transparent;
+  transition: border-color 0.15s;
+}
+.punch-box:focus-within {
+  border-color: var(--accent);
+}
+.punch-box label {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px 6px;
+  cursor: pointer;
+}
+.punch-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.punch-box input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.punch-box input:focus {
+  outline: none;
+}
+.punch-box input::-webkit-date-and-time-value {
+  text-align: left;
+}
+.punch-box label {
+  position: relative;
+}
+/* увесь бокс відкриває вибір часу, значок не забирає місця */
+.punch-box input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  opacity: 0;
+  cursor: pointer;
+}
+.punch-now {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+}
+.punch-now:active {
+  transform: scale(0.95);
+}
+.punch-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.punch-note .ico {
+  flex: none;
+  margin-top: 2px;
+}
+.punch-note.less .ico {
+  color: var(--warn);
+}
+.punch-note.more .ico {
+  color: var(--good);
+}
+
+/* ---------- Мета на місяць ---------- */
+.goal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.month-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.month-pct {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.month-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.month-main .ctx-delta {
+  margin-top: 0;
+  font-size: 13px;
+  padding: 4px 9px;
+}
+.mbar {
+  position: relative;
+  height: 10px;
+  margin: 18px 0 4px;
+  border-radius: 5px;
+  background: var(--line-soft);
+}
+.mbar i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 5px;
+  transition: width 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mbar-fill {
+  background: var(--accent);
+}
+.mbar-fill.lv-bad {
+  background: var(--bad);
+}
+.mbar-fill.lv-warn {
+  background: var(--warn);
+}
+.mbar-fill.lv-good {
+  background: var(--good);
+}
+.mbar-fill.lv-great {
+  background: var(--great);
+}
+.mbar-live {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 4px, color-mix(in srgb, var(--accent) 20%, transparent) 4px 8px);
+}
+.mbar em {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+}
+.mbar em span {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 800;
+  font-style: normal;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.month-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.month-live i {
+  flex: none;
+  width: 16px;
+  height: 8px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 4px, color-mix(in srgb, var(--accent) 20%, transparent) 4px 8px);
+}
+.month-live b {
+  color: var(--text);
+}
+.month-card .facts {
+  margin-top: 14px;
+}
+.month-card .fact {
+  font-size: 14px;
+}
+
 /* ---------- Вироби ---------- */
 .plist {
   display: flex;
@@ -1976,6 +2203,23 @@ input::placeholder {
   background: var(--bad-soft);
   color: var(--bad);
 }
+.sum-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sum-row .goal-btn {
+  margin-bottom: 8px;
+}
+.sum-hints {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+.sum-hints .fact {
+  font-size: 14px;
+}
 .sum-num {
   font-size: 56px;
   font-weight: 800;
@@ -2471,6 +2715,10 @@ input::placeholder {
   background: var(--warn-soft);
   color: var(--warn);
 }
+.fact.accent .fact-ico {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 .fact span:last-child {
   padding-top: 3px;
 }
@@ -2835,6 +3083,36 @@ input::placeholder {
   padding: 12px 14px;
   border-radius: 18px;
   background: var(--surface-2);
+}
+.srow-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--surface-2);
+}
+.srow-col b {
+  display: block;
+}
+.wdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.wday {
+  height: 40px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+.wday.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 .srow-static > div:first-child {
   min-width: 0;
