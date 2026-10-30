@@ -1,0 +1,110 @@
+rules_version = '2';
+
+// Правила доступу до бази «Норма».
+//
+// ПЕРЕД ПУБЛІКАЦІЄЮ впишіть у функцію isOwner() ваш Gmail (малими літерами) замість заглушки.
+// Власник завжди має права адміністратора, тож випадково «закрити собі двері» неможливо.
+//
+// Хто що бачить:
+//  • сторонні (не в списку доступу) — нічого;
+//  • працівник — довідник виробів, налаштування зміни і ТІЛЬКИ свої записи;
+//  • адміністратор — усе: вироби, список доступу, записи всіх працівників.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function isOwner() { return signedIn() && myEmail() == 'OWNER_EMAIL'; }
+    function accessPath() { return /databases/$(database)/documents/access/$(myEmail()); }
+    function member() {
+      return signedIn() && exists(accessPath()) && get(accessPath()).data.active == true;
+    }
+    function hasAccess() { return isOwner() || member(); }
+    function isAdmin() {
+      return isOwner() || (member() && get(accessPath()).data.role == 'admin');
+    }
+
+    // ---------- Список доступу: access/{email} ----------
+    function validAccess(d) {
+      return d.keys().hasOnly(['name', 'role', 'active', 'owner', 'updatedAt', 'updatedBy'])
+        && d.name is string && d.name.size() <= 120
+        && d.role in ['admin', 'worker']
+        && d.active is bool
+        && (!('owner' in d) || d.owner == false || isOwner());
+    }
+    match /access/{email} {
+      allow get: if signedIn() && (email == myEmail() || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isAdmin()
+        && email == email.lower()
+        && email.matches('[^@\\s/]+@[^@\\s/]+[.][^@\\s/]+')
+        && validAccess(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Довідник виробів: products/{id} ----------
+    function validProduct(d) {
+      return d.keys().hasOnly(['name', 'norm', 'code', 'group', 'archived', 'updatedAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 200
+        && d.norm is number && d.norm > 0 && d.norm <= 1000000
+        && d.code is string && d.code.size() <= 60
+        && d.group is string && d.group.size() <= 100
+        && d.archived is bool;
+    }
+    match /products/{id} {
+      allow read: if hasAccess();
+      allow create, update: if isAdmin() && validProduct(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Налаштування зміни: settings/main ----------
+    function validSettings(d) {
+      return d.keys().hasOnly(['shift', 'brk', 'updatedAt', 'updatedBy'])
+        && d.shift is number && d.shift > 0 && d.shift <= 1440
+        && d.brk is number && d.brk >= 0 && d.brk < d.shift;
+    }
+    match /settings/{id} {
+      allow read: if hasAccess();
+      allow create, update: if isAdmin() && id == 'main' && validSettings(request.resource.data);
+    }
+
+    // ---------- Журнал: entries/{дата}_{email} ----------
+    function validEntry(id, d) {
+      return d.keys().hasOnly(['email', 'name', 'date', 'month', 'items', 'shift', 'brk', 'base',
+                               'downtime', 'reason', 'comment', 'percent', 'updatedAt', 'updatedBy'])
+        && d.email is string && d.email == d.email.lower()
+        && d.date is string && d.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && d.month is string && d.month.matches('[0-9]{4}-[0-9]{2}')
+        && d.date.matches(d.month + '-[0-9]{2}')
+        && id == d.date + '_' + d.email
+        && d.name is string && d.name.size() <= 120
+        && d.items is list && d.items.size() <= 40
+        && d.shift is number && d.shift > 0 && d.shift <= 1440
+        && d.brk is number && d.brk >= 0
+        && d.base is number && d.base > 0 && d.base <= 1440
+        && d.downtime is number && d.downtime >= 0
+        && d.shift - d.brk - d.downtime > 0
+        && d.reason is string && d.reason.size() <= 300
+        && d.comment is string && d.comment.size() <= 500
+        && d.percent is number
+        && d.updatedBy == myEmail();
+    }
+    match /entries/{id} {
+      allow get: if hasAccess()
+        && (resource == null || resource.data.email == myEmail() || isAdmin());
+      allow list: if hasAccess() && (isAdmin() || resource.data.email == myEmail());
+      allow create: if hasAccess()
+        && validEntry(id, request.resource.data)
+        && (request.resource.data.email == myEmail() || isAdmin());
+      allow update: if hasAccess()
+        && validEntry(id, request.resource.data)
+        && (resource.data.email == myEmail() || isAdmin());
+      allow delete: if hasAccess() && (resource.data.email == myEmail() || isAdmin());
+    }
+  }
+}

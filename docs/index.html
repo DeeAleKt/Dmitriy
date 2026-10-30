@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="Розрахунок і облік виконання норм виробітку" />
+    <meta name="theme-color" content="#f3f4f8" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Норма" />
+    <title>Норма</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="app.css?v=b1a7ebe5b1" />
+    <script>
+      try {
+        var t = JSON.parse(localStorage.getItem('norma.theme'));
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>Увімкніть JavaScript, щоб користуватися програмою.</noscript>
+    <script src="config.js?v=b1a7ebe5b1"></script>
+    <script type="module" src="app.js?v=b1a7ebe5b1"></script>
+  </body>
+</html>

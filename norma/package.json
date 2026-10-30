@@ -1,0 +1,21 @@
+{
+  "name": "norma",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Облік виконання норм виробітку працівниками",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "test": "node --test test/calc.test.mjs test/xlsx.test.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-norma \"node --test test/rules.test.mjs\"",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-norma"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "esbuild": "0.28.2",
+    "firebase": "12.14.0",
+    "firebase-tools": "15.34.2",
+    "preact": "10.29.8"
+  }
+}
