@@ -1,4 +1,5 @@
-// Збирає програму в ../docs (звідти її віддає GitHub Pages).
+// Збирає вебверсію в ../docs (звідти її віддає Firebase Hosting або GitHub Pages)
+// і сторінку для claude.ai в dist/calc-artifact.html.
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,20 +9,24 @@ const root = new URL('.', import.meta.url).pathname;
 const out = join(root, '../docs');
 const pub = join(root, 'public');
 const watch = process.argv.includes('--watch');
-const demo = process.argv.includes('--demo');
 
-const options = {
-  entryPoints: [join(root, 'src/main.jsx')],
-  outfile: join(out, 'app.js'),
+const common = {
   bundle: true,
   minify: !watch,
-  sourcemap: watch ? 'inline' : false,
   format: 'esm',
   target: ['es2020'],
   jsx: 'automatic',
   jsxImportSource: 'preact',
-  loader: { '.rules': 'text' },
   legalComments: 'eof',
+  charset: 'utf8',
+};
+
+// Вебверсія з акаунтами: docs/ (Firebase Hosting або GitHub Pages)
+const webOptions = {
+  ...common,
+  entryPoints: [join(root, 'src/calc/web.jsx')],
+  outfile: join(out, 'app.js'),
+  sourcemap: watch ? 'inline' : false,
   logLevel: 'info',
   plugins: [{ name: 'shell', setup: (b) => b.onEnd(copyShell) }],
 };
@@ -39,63 +44,27 @@ function copyShell(result) {
   }
   copyFileSync(join(pub, 'manifest.webmanifest'), join(out, 'manifest.webmanifest'));
   for (const f of readdirSync(join(pub, 'icons'))) copyFileSync(join(pub, 'icons', f), join(out, 'icons', f));
-  // config.js редагує власник прямо в docs/ — не перезаписуємо його
-  if (!existsSync(join(out, 'config.js'))) copyFileSync(join(pub, 'config.js'), join(out, 'config.js'));
-  writeFileSync(join(out, '.nojekyll'), '');
-  console.log(`  версія ${hash}`);
-}
-
-// Демо: та сама програма без Firebase, з вигаданими даними в браузері, одним HTML-файлом.
-const demoModules = {
-  name: 'demo-modules',
-  setup(b) {
-    b.onResolve({ filter: /^\.\.?\/(firebase|data)\.js$/ }, (args) => {
-      if (args.importer.includes(`${join('src', 'demo')}`)) return;
-      return { path: join(root, 'src/demo', args.path.replace(/^.*\//, '')) };
-    });
-  },
-};
-
-async function buildDemo() {
-  const { plugins, outfile, ...rest } = options;
-  const result = await esbuild.build({ ...rest, outdir: join(root, 'dist'), write: false, plugins: [demoModules] });
-  const pick = (ext) => result.outputFiles.find((f) => f.path.endsWith(ext)).text;
-  const js = pick('.js').replaceAll('</script', '<\\/script');
-  const css = pick('.css');
-  const fixHeader =
-    '.top{top:env(safe-area-inset-top,0px);padding-top:10px}' +
-    'body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:21;background:var(--bg)}';
-  const body =
-    `<title>Норма (демо)</title>\n<meta name="robots" content="noindex, nofollow">\n` +
-    `<style>${css}${fixHeader}</style>\n<div id="app"></div>\n<script type="module">${js}</script>\n`;
-  // фрагмент для сторінки claude.ai (обгортку додає сам сервіс) і повний документ для GitHub Pages
-  mkdirSync(join(root, 'dist'), { recursive: true });
-  writeFileSync(join(root, 'dist/demo-artifact.html'), body);
-  mkdirSync(join(out, 'demo'), { recursive: true });
+  // config.js власник заповнює прямо в docs/ — не перезаписуємо вже заповнений
+  const cfg = join(out, 'config.js');
+  if (!existsSync(cfg) || readFileSync(cfg, 'utf8').includes('ВСТАВТЕ_СЮДИ')) copyFileSync(join(pub, 'config.js'), cfg);
+  // стара адреса окремого калькулятора веде на головну
+  mkdirSync(join(out, 'calc'), { recursive: true });
   writeFileSync(
-    join(out, 'demo/index.html'),
-    '<!doctype html>\n<html lang="uk">\n<head>\n<meta charset="utf-8">\n' +
-      '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
-      '<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">\n</head>\n<body>\n' +
-      body +
-      '</body>\n</html>\n',
+    join(out, 'calc/index.html'),
+    '<!doctype html>\n<meta charset="utf-8">\n<meta name="robots" content="noindex">\n<title>Норма</title>\n' +
+      '<script>location.replace("../" + location.search + location.hash)</script>\n<a href="../">Норма</a>\n',
   );
-  console.log(`  демо: ../docs/demo/index.html, dist/demo-artifact.html (${Math.round(body.length / 1024)} КБ)`);
+  writeFileSync(join(out, '.nojekyll'), '');
+  console.log(`  вебверсія: ../docs (версія ${hash})`);
 }
 
-// Офлайн-калькулятор: окремий застосунок одним HTML-файлом, без сервера і зовнішніх запитів.
-async function buildCalc() {
+// Сторінка для claude.ai: той самий калькулятор одним HTML-фрагментом, дані — в акаунті Claude.
+async function buildArtifact() {
   const result = await esbuild.build({
+    ...common,
     entryPoints: [join(root, 'src/calc/main.jsx')],
     outdir: join(root, 'dist/calc'),
-    bundle: true,
     minify: true,
-    format: 'esm',
-    target: ['es2020'],
-    jsx: 'automatic',
-    jsxImportSource: 'preact',
-    legalComments: 'eof',
-    charset: 'utf8',
     write: false,
     logLevel: 'warning',
   });
@@ -107,33 +76,15 @@ async function buildCalc() {
     `<style>${css}</style>\n<div id="app"></div>\n<script type="module">${js}</script>\n`;
   mkdirSync(join(root, 'dist'), { recursive: true });
   writeFileSync(join(root, 'dist/calc-artifact.html'), body);
-  mkdirSync(join(out, 'calc'), { recursive: true });
-  writeFileSync(
-    join(out, 'calc/index.html'),
-    '<!doctype html>\n<html lang="uk">\n<head>\n<meta charset="utf-8">\n' +
-      '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
-      '<meta name="robots" content="noindex, nofollow">\n' +
-      '<meta name="theme-color" content="#f1f3f8" media="(prefers-color-scheme: light)">\n' +
-      '<meta name="theme-color" content="#0a0d15" media="(prefers-color-scheme: dark)">\n' +
-      '<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="Норма">\n' +
-      '<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">\n<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">\n' +
-      '<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>\n' +
-      '</head>\n<body>\n' +
-      body +
-      '</body>\n</html>\n',
-  );
-  console.log(`  калькулятор: ../docs/calc/index.html, dist/calc-artifact.html (${Math.round(body.length / 1024)} КБ)`);
+  console.log(`  для claude.ai: dist/calc-artifact.html (${Math.round(body.length / 1024)} КБ)`);
 }
 
 if (watch) {
-  const ctx = await esbuild.context(options);
+  const ctx = await esbuild.context(webOptions);
   await ctx.watch();
-} else if (demo) {
-  await buildDemo();
 } else if (process.argv.includes('--calc')) {
-  await buildCalc();
+  await buildArtifact();
 } else {
-  await esbuild.build(options);
-  await buildDemo();
-  await buildCalc();
+  await esbuild.build(webOptions);
+  await buildArtifact();
 }

@@ -1,7 +1,7 @@
 // Файли: Excel з історією, резервна копія і відновлення. Без мережі — лише збереження на пристрій.
 import { buildXlsx, excelDate, STYLE } from '../xlsx.js';
 import { store, today } from '../util.js';
-import { computeDay, MONTHS_SHORT, normalizeSettings, summarize } from './model.js';
+import { computeDay, isApprox, MONTHS_SHORT, normalizeSettings, oddDay, summarize } from './model.js';
 
 const WD = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 const r1 = (n) => Math.round(n * 10) / 10;
@@ -33,7 +33,7 @@ export async function exportExcel(records, period, goal = 100) {
   const recs = [...records].sort((a, b) => a.date.localeCompare(b.date));
   if (!recs.length) throw new Error('Немає днів для експорту');
   const days = [
-    ['Дата', 'День', 'Зміна', 'Початок', 'Кінець', 'Перерва, хв', 'Робочий час, хв', 'Простій, хв', 'Причини простою', 'Інші роботи, хв', 'Що робили', 'Вироби', 'Виробів, шт', 'Нормо-час, хв', 'Виконання, %'],
+    ['Дата', 'День', 'Зміна', 'Вхід', 'Вихід', 'Перерва, хв', 'Робочий час, хв', 'Простій, хв', 'Причини простою', 'Інші роботи, хв', 'Що робили', 'Вироби', 'Виробів, шт', 'Нормо-час, хв', 'Виконання, %'],
   ];
   const items = [['Дата', 'Виріб', 'Норма за зміну, шт', 'Норма на день, шт', 'Зроблено, шт', 'Нормо-час, хв']];
   for (const r of recs) {
@@ -111,4 +111,46 @@ export async function readBackup(file) {
     days[k] = { ...r, date: k };
   }
   return { settings: normalizeSettings(data.settings), days };
+}
+
+/** Звіт адміністратора за місяць: підсумок по кожному працівнику і всі дні команди. */
+export async function exportTeam(rows, month) {
+  const people = [
+    ['Працівник', 'Пошта', 'Днів', 'З нормою', 'Середнє, %', 'Мета на місяць, %', 'Виробів, шт', 'Простій, хв', 'Інші роботи, хв', 'Минулий місяць, %', 'Зміна, %', 'Підозрілі дні', 'Дні з приблизною нормою', 'Доступ'],
+  ];
+  const days = [
+    ['Працівник', 'Дата', 'День', 'Зміна', 'Вхід', 'Вихід', 'Перерва, хв', 'Робочий час, хв', 'Простій, хв', 'Інші роботи, хв', 'Вироби', 'Виробів, шт', 'Нормо-час, хв', 'Виконання, %', 'Примітка'],
+  ];
+  const sorted = [...rows].sort((a, b) => a.name.localeCompare(b.name, 'uk'));
+  for (const r of sorted) {
+    const num = (v) => (v == null ? '' : { v: r1(v), s: STYLE.decimal });
+    people.push([r.name, r.email, r.n, r.goalDays, num(r.pct), r.goal, r.pieces, r.downMin, r.otherMin, num(r.prevPct), num(r.delta), r.odd, r.approx, r.blocked ? 'закрито' : 'так']);
+    for (const rec of [...r.recs].sort((a, b) => a.date.localeCompare(b.date))) {
+      const c = computeDay(rec, rec.base || 420);
+      const [y, m, d] = rec.date.split('-').map(Number);
+      const note = [oddDay(c) ? 'неправдоподібний відсоток' : '', isApprox(rec) ? 'приблизна норма' : ''].filter(Boolean).join('; ');
+      days.push([
+        r.name,
+        { v: excelDate(rec.date), s: STYLE.date },
+        WD[new Date(y, m - 1, d).getDay()],
+        rec.shiftName || '',
+        rec.start,
+        rec.end,
+        rec.brk,
+        c.avail,
+        c.downMin,
+        c.otherMin,
+        rec.products.map((p) => `${p.name || 'Виріб'} × ${p.qty}`).join('; '),
+        c.pieces,
+        r1(c.earned),
+        { v: r1(c.pct), s: STYLE.decimal },
+        note,
+      ]);
+    }
+  }
+  const bytes = buildXlsx([
+    { name: 'Команда', widths: [24, 26, 7, 10, 11, 12, 11, 11, 13, 14, 9, 11, 12, 9], rows: people },
+    { name: 'Дні', widths: [24, 11, 5, 16, 7, 7, 10, 12, 10, 13, 36, 10, 11, 11, 24], rows: days },
+  ]);
+  return saveFile(`norma_komanda_${month}.xlsx`, new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 }

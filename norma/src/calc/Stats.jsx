@@ -36,7 +36,7 @@ const MODES = [
 const MODE_WORD = { week: 'тиждень', month: 'місяць', year: 'рік' };
 
 export function Stats() {
-  const { settings, setSettings, days, setDays, openDay, switchDate, openSettings } = useApp();
+  const { settings, setSettings, days, setDays, openDay, switchDate, openSettings, readOnly } = useApp();
   const [goalSheet, setGoalSheet] = useState(false);
   const [fixName, setFixName] = useState(null);
   const [mode, setMode] = useState('month');
@@ -85,23 +85,27 @@ export function Stats() {
     <div class="screen">
       <header class="topbar">
         <h1 class="title">Статистика</h1>
-        <button class="round-btn" onClick={openSettings} aria-label="Налаштування">
-          <Icon name="sliders" />
-        </button>
+        {!readOnly && (
+          <button class="round-btn" onClick={openSettings} aria-label="Налаштування">
+            <Icon name="sliders" />
+          </button>
+        )}
       </header>
 
       {!any ? (
         <section class="card">
           <Empty
             icon="chart"
-            title="Тут буде ваша статистика"
+            title={readOnly ? 'Ще немає жодного дня' : 'Тут буде ваша статистика'}
             action={
-              <button class="btn soft" onClick={addSample}>
-                <Icon name="sparkle" size={18} /> Подивитися на прикладі
-              </button>
+              !readOnly && (
+                <button class="btn soft" onClick={addSample}>
+                  <Icon name="sparkle" size={18} /> Подивитися на прикладі
+                </button>
+              )
             }
           >
-            Просто вносьте зроблене на вкладці «Сьогодні» — кожен день зберігається сам. Тут зʼявляться середній відсоток,
+            {readOnly ? 'Щойно працівник внесе перший день, тут зʼявиться його статистика.' : ''} Просто вносьте зроблене на вкладці «Сьогодні» — кожен день зберігається сам. Тут зʼявляться середній відсоток,
             тенденція, серії днів з нормою, рекорди, календар і куди йде робочий час.
           </Empty>
         </section>
@@ -111,9 +115,11 @@ export function Stats() {
             <div class="banner sample">
               <Icon name="sparkle" size={18} />
               <span>Частина днів — вигаданий приклад.</span>
-              <button class="link" onClick={removeSample}>
-                Прибрати
-              </button>
+              {!readOnly && (
+                <button class="link" onClick={removeSample}>
+                  Прибрати
+                </button>
+              )}
             </div>
           )}
           <Segmented value={mode} options={MODES} onChange={setMode} />
@@ -136,8 +142,8 @@ export function Stats() {
           ) : (
             <>
               <OddBanner items={cur.odd} onDay={openDay} />
-              <ApproxBanner n={cur.approxDays} onFix={setFixName} />
-              <Summary cur={cur} prev={prev} goal={mstat ? mstat.goal : goal} mode={mode} mstat={mstat} live={isCurrent && open} onGoal={() => setGoalSheet(true)} />
+              <ApproxBanner n={cur.approxDays} onFix={readOnly ? null : setFixName} />
+              <Summary cur={cur} prev={prev} goal={mstat ? mstat.goal : goal} mode={mode} mstat={mstat} live={isCurrent && open} onGoal={readOnly ? null : () => setGoalSheet(true)} />
 
               <div class="tiles">
                 <Tile icon="flame" tone="warn" label="Серія зараз" value={`${st.cur}`} unit={plural(st.cur, ['день', 'дні', 'днів'])} sub={st.best > st.cur ? `найдовша — ${st.best}` : 'поспіль з нормою'} />
@@ -154,7 +160,7 @@ export function Stats() {
                 <Tile icon="box" label="Виробів" value={fmt(cur.pieces, 0)} unit="шт" sub={`за ${MODE_WORD[mode]}`} />
               </div>
 
-              {mode === 'month' && <MonthCalendar anchor={anchor} days={days} goal={goal} onDay={openDay} onEmpty={(d) => switchDate(d, true)} />}
+              {mode === 'month' && <MonthCalendar anchor={anchor} days={days} goal={goal} onDay={openDay} onEmpty={(d) => !readOnly && switchDate(d, true)} />}
               {mode === 'year' && (
                 <YearMap
                   year={fromISO(anchor).getFullYear()}
@@ -235,8 +241,8 @@ function Summary({ cur, prev, goal, mode, mstat, live, onGoal }) {
           <small>%</small>
         </div>
         {mstat && (
-          <button class="goal-btn" onClick={onGoal} aria-label="Змінити мету на місяць">
-            мета {fmt(mstat.goal, 0)}% <Icon name="pencil" size={13} />
+          <button class="goal-btn" onClick={onGoal || undefined} disabled={!onGoal} aria-label="Мета на місяць">
+            мета {fmt(mstat.goal, 0)}% {onGoal && <Icon name="pencil" size={13} />}
           </button>
         )}
       </div>

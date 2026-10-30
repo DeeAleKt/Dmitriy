@@ -110,14 +110,14 @@ export function ApproxBanner({ n, onFix }) {
       <div class="approx-banner-top">
         <span class="approx-sign">≈</span>
         <span>
-          {daysWord(n)} пораховано з приблизною нормою — відсотки орієнтовні. Коли норма зʼявиться, уточніть її:
+          {daysWord(n)} пораховано з приблизною нормою — відсотки орієнтовні.{onFix ? ' Коли норма зʼявиться, уточніть її:' : ''}
         </span>
       </div>
       <div class="approx-chips">
         {list.map((x) => (
-          <button class="approx-chip" onClick={() => onFix(x.name)}>
+          <button class="approx-chip" onClick={onFix ? () => onFix(x.name) : undefined} disabled={!onFix}>
             {x.name} <em>≈{fmt(x.norm)}</em>
-            <Icon name="pencil" size={13} />
+            {onFix && <Icon name="pencil" size={13} />}
           </button>
         ))}
       </div>

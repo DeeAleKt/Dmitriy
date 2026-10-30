@@ -3253,7 +3253,7 @@ input::placeholder {
 .wday.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 .srow-static > div:first-child {
   min-width: 0;
@@ -3543,4 +3543,386 @@ input::placeholder {
 }
 .tip.warn > .ico {
   color: var(--bad);
+}
+
+/* ---------- Вхід ---------- */
+.auth {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px));
+  background:
+    radial-gradient(70% 45% at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+    var(--bg);
+}
+.auth.splash .logo {
+  animation: blink 1.4s ease-in-out infinite;
+}
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 26px 20px 20px;
+  border-radius: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow);
+}
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.auth-brand h1 {
+  margin: 6px 0 0;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+.auth-brand p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+.btn.google {
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  color: var(--text);
+}
+.btn.google:active {
+  background: var(--surface-2);
+}
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--faint);
+  font-size: 13px;
+  font-weight: 650;
+}
+.auth-or::before,
+.auth-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pass {
+  position: relative;
+  display: block;
+}
+.pass .input {
+  padding-right: 48px;
+}
+.pass-eye {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 48px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.auth-msg {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.auth-msg .ico {
+  flex: none;
+  margin-top: 1px;
+}
+.auth-msg.err {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.auth-msg.ok {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.auth-forgot {
+  align-self: center;
+}
+.auth-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 4px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.auth-note .ico {
+  flex: none;
+  margin-top: 1px;
+  color: var(--good);
+}
+.blocked-ico {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+/* ---------- Акаунт ---------- */
+.account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--surface-2);
+}
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.account-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.account-main b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 16px;
+}
+.account-main small {
+  color: var(--muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 750;
+  font-style: normal;
+  white-space: nowrap;
+}
+.badge.bad {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+/* ---------- Команда ---------- */
+.hint.center {
+  text-align: center;
+  padding: 10px 0;
+}
+.ico.spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.chips-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 2px 16px;
+  scrollbar-width: none;
+}
+.chips-row::-webkit-scrollbar {
+  display: none;
+}
+.fchip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.fchip em {
+  font-style: normal;
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.fchip.on {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+}
+.fchip.on em {
+  background: color-mix(in srgb, var(--surface) 22%, transparent);
+  color: var(--surface);
+}
+.team-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--line-soft);
+}
+.wrow:last-child {
+  border-bottom: 0;
+}
+.wrow:active {
+  background: var(--surface-2);
+}
+.wrow.blocked {
+  opacity: 0.6;
+}
+.wmain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wname {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.wname-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 750;
+  font-size: 15.5px;
+}
+.wsub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wtoday {
+  font-weight: 750;
+}
+.wtoday.idle {
+  color: var(--faint);
+}
+.wflag {
+  font-weight: 800;
+}
+.wflag.bad {
+  color: var(--bad);
+}
+.wflag.warn {
+  color: var(--warn);
+}
+.wright {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.wright small {
+  font-size: 11.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.wright small.up {
+  color: var(--good);
+}
+.wright small.down {
+  color: var(--bad);
+}
+.team-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wfacts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.wfacts div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.wfacts span {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.wfacts b {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.worker-view .screen {
+  gap: 12px;
+}
+.worker-view .topbar {
+  display: none;
+}
+.lrow-main.static {
+  cursor: default;
+}
+.lrow-main.static em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 700;
 }

@@ -1,13 +1,4 @@
 {
-  "indexes": [
-    {
-      "collectionGroup": "entries",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "email", "order": "ASCENDING" },
-        { "fieldPath": "month", "order": "ASCENDING" }
-      ]
-    }
-  ],
+  "indexes": [],
   "fieldOverrides": []
 }

@@ -17,7 +17,7 @@ const WD = [
 ];
 
 export function Settings({ onClose }) {
-  const { settings, setSettings, days, setDays, sync, wipeAll } = useApp();
+  const { settings, setSettings, days, setDays, sync, wipeAll, account, signOut } = useApp();
   const cloud = sync.mode === 'cloud';
   const [edit, setEdit] = useState(null); // {type:'shift'|'product', item}
   const set = (p) => setSettings((s) => ({ ...s, ...p }));
@@ -66,6 +66,7 @@ export function Settings({ onClose }) {
 
   return (
     <Sheet title="Налаштування" onClose={onClose} tall>
+      {account && <AccountGroup account={account} signOut={signOut} />}
       <section class="sgroup">
         <h3>Мета і норма</h3>
         <div class="srow-static">
@@ -272,7 +273,9 @@ export function Settings({ onClose }) {
       <p class="privacy">
         <Icon name="shield" size={16} />
         <span>
-          {cloud
+          {cloud && sync.provider === 'norma'
+            ? 'Дані зберігаються самі у вашому акаунті «Норми» — на будь-якому телефоні після входу. Бачите їх ви та адміністратор. Резервна копія у файл — про всяк випадок.'
+            : cloud
             ? 'Дані зберігаються самі в особистому розділі вашого акаунта Claude — їх бачите лише ви, на будь-якому своєму пристрої. Резервна копія у файл — про всяк випадок.'
             : 'Дані зберігаються самі, лише в цьому браузері на вашому телефоні, й нікуди не надсилаються. Якщо міняєте телефон або чистите браузер — спершу збережіть резервну копію.'}
         </span>
@@ -281,6 +284,68 @@ export function Settings({ onClose }) {
       {edit?.type === 'shift' && <ShiftEdit item={edit.item} onClose={() => setEdit(null)} />}
       {edit?.type === 'product' && <ProductEdit item={edit.item} onClose={() => setEdit(null)} />}
     </Sheet>
+  );
+}
+
+function AccountGroup({ account, signOut }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setNameValue] = useState(account.name);
+  const initials = (account.name || account.email || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+  async function save() {
+    if (name.trim().length < 2) return;
+    try {
+      await account.rename(name);
+      setEditing(false);
+      toast('Імʼя змінено');
+    } catch {
+      toast('Не вдалося змінити імʼя — немає інтернету?', 'err');
+    }
+  }
+  return (
+    <section class="sgroup">
+      <h3>Акаунт</h3>
+      <div class="account">
+        <span class="avatar">{initials}</span>
+        <span class="account-main">
+          {editing ? (
+            <span class="inline-form">
+              <input class="input" data-autofocus maxLength={80} value={name} onInput={(e) => setNameValue(e.currentTarget.value)} />
+              <button class="btn primary" disabled={name.trim().length < 2} onClick={save}>
+                Зберегти
+              </button>
+            </span>
+          ) : (
+            <>
+              <b>
+                {account.name}
+                {account.isAdmin && <em class="badge">адміністратор</em>}
+              </b>
+              <small>{account.email}</small>
+            </>
+          )}
+        </span>
+        {!editing && (
+          <button class="icon-btn" onClick={() => setEditing(true)} aria-label="Змінити імʼя">
+            <Icon name="pencil" size={18} />
+          </button>
+        )}
+      </div>
+      <p class="hint">
+        {account.isAdmin
+          ? 'Ви бачите результати всіх працівників на вкладці «Команда». Ваші власні дні — як у всіх.'
+          : 'Ваші дні, відсотки, вироби й простої бачите ви та адміністратор (керівник). Інші працівники їх не бачать.'}
+      </p>
+      {signOut && (
+        <button class="btn ghost block" onClick={signOut}>
+          <Icon name="logout" size={18} /> Вийти з акаунта
+        </button>
+      )}
+    </section>
   );
 }
 

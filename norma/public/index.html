@@ -4,8 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex, nofollow" />
-    <meta name="description" content="Розрахунок і облік виконання норм виробітку" />
-    <meta name="theme-color" content="#f3f4f8" />
+    <meta name="description" content="Калькулятор виконання норми з особистою статистикою" />
+    <meta name="theme-color" content="#f1f3f8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0d15" media="(prefers-color-scheme: dark)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -15,17 +16,20 @@
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="app.css?v=__VERSION__" />
-    <script>
-      try {
-        var t = JSON.parse(localStorage.getItem('norma.theme'));
-        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
-      } catch (e) {}
-    </script>
+    <style>
+      :root {
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
-    <noscript>Увімкніть JavaScript, щоб користуватися програмою.</noscript>
+    <noscript>Увімкніть JavaScript, щоб користуватися калькулятором.</noscript>
     <script src="config.js?v=__VERSION__"></script>
     <script type="module" src="app.js?v=__VERSION__"></script>
+    <script>
+      if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
+    </script>
   </body>
 </html>

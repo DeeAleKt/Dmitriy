@@ -1,7 +1,7 @@
 // Сервіс-воркер: кешує лише оболонку програми (код, стилі, іконки), щоб вона швидко відкривалась.
 // Дані з бази НЕ кешуються — запити до Firebase йдуть напряму.
-const CACHE = 'norma-6198a6dea3';
-const SHELL = ['./', './app.js?v=6198a6dea3', './app.css?v=6198a6dea3', './manifest.webmanifest', './icons/icon.svg'];
+const CACHE = 'norma-83cb6e68be';
+const SHELL = ['./', './app.js?v=83cb6e68be', './app.css?v=83cb6e68be', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(

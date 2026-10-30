@@ -23,7 +23,7 @@ function summaryLine(r) {
 }
 
 export function History() {
-  const { days, settings, openDay, openSettings, go } = useApp();
+  const { days, settings, openDay, openSettings, go, readOnly } = useApp();
   const goal = settings.goal;
   const groups = useMemo(() => {
     const list = Object.values(days).sort((a, b) => b.date.localeCompare(a.date));
@@ -40,9 +40,11 @@ export function History() {
     <div class="screen">
       <header class="topbar">
         <h1 class="title">Історія</h1>
-        <button class="round-btn" onClick={openSettings} aria-label="Налаштування">
-          <Icon name="sliders" />
-        </button>
+        {!readOnly && (
+          <button class="round-btn" onClick={openSettings} aria-label="Налаштування">
+            <Icon name="sliders" />
+          </button>
+        )}
       </header>
       {!groups.length && (
         <section class="card">
@@ -50,12 +52,14 @@ export function History() {
             icon="history"
             title="Поки що жодного дня"
             action={
-              <button class="btn soft" onClick={() => go('today')}>
-                <Icon name="gauge" size={18} /> До розрахунку
-              </button>
+              !readOnly && (
+                <button class="btn soft" onClick={() => go('today')}>
+                  <Icon name="gauge" size={18} /> До розрахунку
+                </button>
+              )
             }
           >
-            Щойно внесете зроблене на вкладці «Сьогодні», день зʼявиться тут — зберігати вручну не треба. Будь-який день можна відкрити, перевірити розрахунок і виправити.
+            {readOnly ? 'Працівник ще не вніс жодного дня.' : ''} Щойно внесете зроблене на вкладці «Сьогодні», день зʼявиться тут — зберігати вручну не треба. Будь-який день можна відкрити, перевірити розрахунок і виправити.
           </Empty>
         </section>
       )}
@@ -118,7 +122,7 @@ export function History() {
 }
 
 export function DaySheet({ date, onClose }) {
-  const { days, settings, setDays, editDay } = useApp();
+  const { days, settings, setDays, editDay, readOnly } = useApp();
   const r = days[date];
   if (!r) return null;
   const res = computeDay(r, r.base || 420);
@@ -143,6 +147,7 @@ export function DaySheet({ date, onClose }) {
       onClose={onClose}
       tall
       footer={
+        !readOnly && (
         <div class="row">
           <button class="btn ghost danger-text sq" onClick={remove} aria-label="Видалити день">
             <Icon name="trash" />
@@ -157,6 +162,7 @@ export function DaySheet({ date, onClose }) {
             <Icon name="pencil" size={18} /> Відкрити в розрахунку
           </button>
         </div>
+        )
       }
     >
       <div class={`day-hero lv-${lv}`}>
@@ -172,7 +178,8 @@ export function DaySheet({ date, onClose }) {
         <div class="tip warn">
           <Icon name="info" size={18} />
           <span>
-            <b>{fmt(res.pct, 0)}% — схоже на помилку.</b> {oddDay(res).text}. Відкрийте день у розрахунку й виправте — тоді й середнє стане правильним.
+            <b>{fmt(res.pct, 0)}% — схоже на помилку.</b> {oddDay(res).text}.{' '}
+            {readOnly ? 'Попросіть працівника перевірити цей день.' : 'Відкрийте день у розрахунку й виправте — тоді й середнє стане правильним.'}
           </span>
         </div>
       )}

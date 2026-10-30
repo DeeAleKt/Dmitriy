@@ -1,14 +1,14 @@
 {
-  "name": "Норма — облік виконання норм",
+  "name": "Норма — калькулятор виконання норми",
   "short_name": "Норма",
-  "description": "Розрахунок і облік виконання норм виробітку",
+  "description": "Калькулятор виконання норми з особистою статистикою",
   "lang": "uk",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f3f4f8",
-  "theme_color": "#f3f4f8",
+  "background_color": "#f1f3f8",
+  "theme_color": "#f1f3f8",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },

@@ -81,7 +81,7 @@ export async function connect() {
   }
 }
 
-function createCloud(col) {
+export function createCloud(col) {
   const pending = new Map(); // id → { body, timer }
   const inflight = new Map(); // id → лічильник активних записів
   const chains = new Map(); // id → проміс останньої операції (одна за раз на документ)

@@ -1,12 +1,34 @@
-// Памʼять браузера (localStorage): миттєвий кеш і єдине сховище поза claude.ai.
-// У claude.ai дані додатково лежать в особистому розділі акаунта — див. cloud.js.
+// Памʼять браузера (localStorage): миттєвий кеш і запасне сховище.
+// В акаунті дані лежать на сервері — див. cloud.js; тут лише копія для швидкого запуску й роботи без мережі.
+// Кожен акаунт має власні ключі (norma.v2.u.<id>.*), щоб на спільному телефоні дані різних людей не змішались.
 import { DEFAULT_SETTINGS, newKey, normalizeSettings, num, shiftLength } from './model.js';
 
-const K = {
-  settings: 'norma.v2.settings',
-  days: 'norma.v2.days',
-  draft: 'norma.v2.draft',
-};
+const LEGACY = 'norma.v2.';
+let prefix = LEGACY;
+const keys = (p = prefix) => ({ settings: `${p}settings`, days: `${p}days`, draft: `${p}draft` });
+let K = keys();
+
+/** Перемкнути памʼять на акаунт (uid) або на спільну без акаунта (null). */
+export function setScope(uid) {
+  prefix = uid ? `${LEGACY}u.${uid}.` : LEGACY;
+  K = keys();
+}
+
+/** Дані калькулятора, що лишились на телефоні без акаунта (щоб запропонувати перенести їх в акаунт). */
+export function legacyData() {
+  const k = keys(LEGACY);
+  const days = read(k.days, null);
+  if (!days || typeof days !== 'object' || !Object.values(days).some((r) => r && !r.sample)) return null;
+  return { settings: normalizeSettings(read(k.settings, null)), days };
+}
+
+export function clearLegacy() {
+  try {
+    Object.values(keys(LEGACY)).forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* сховище недоступне */
+  }
+}
 
 function read(key, fallback) {
   try {
@@ -136,7 +158,7 @@ export function loadAll(todayISO) {
   let settings = read(K.settings, null);
   let draft = read(K.draft, null);
   let migrated = false;
-  if (!settings) {
+  if (!settings && prefix === LEGACY) {
     const m = migrateV1(todayISO);
     if (m) {
       settings = m.settings;
