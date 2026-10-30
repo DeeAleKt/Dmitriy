@@ -7,7 +7,38 @@
 // Приклад: норма 35 шт, простій 30 хв → доступно 390 хв, норма на день 35 × 390 / 420 = 32,5 шт.
 // Зроблено 20 шт → 20 / 32,5 = 61,5 %.
 
-export const DEFAULT_SETTINGS = { shift: 480, brk: 60 };
+// Зміни за замовчуванням; адміністратор змінює їх у «Керування → Зміни».
+export const DEFAULT_SHIFTS = [
+  { id: 's1', name: '1 зміна', start: '06:30', end: '14:30', brk: 60 },
+  { id: 's2', name: '2 зміна', start: '14:30', end: '22:30', brk: 60 },
+  { id: 's3', name: 'Перша подовжена', start: '06:30', end: '17:00', brk: 60 },
+  { id: 's4', name: 'Середня', start: '08:00', end: '17:00', brk: 60 },
+];
+
+// normShift/normBrk — зміна, на яку задано норми виробів (8 год − 60 хв = 420 хв чистого часу).
+export const DEFAULT_SETTINGS = { normShift: 480, normBrk: 60, shifts: DEFAULT_SHIFTS };
+
+export function normalizeSettings(s) {
+  return {
+    normShift: s?.normShift ?? DEFAULT_SETTINGS.normShift,
+    normBrk: s?.normBrk ?? DEFAULT_SETTINGS.normBrk,
+    shifts: Array.isArray(s?.shifts) ? s.shifts : DEFAULT_SHIFTS,
+  };
+}
+
+/** '06:30' → 390 */
+export function toMinutes(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : NaN;
+}
+
+/** Тривалість зміни в хвилинах; кінець раніше за початок — зміна через північ. */
+export function shiftLength(start, end) {
+  const a = toMinutes(start);
+  const b = toMinutes(end);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a === b) return 0;
+  return b > a ? b - a : b + 1440 - a;
+}
 
 export function parseNum(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -16,7 +47,7 @@ export function parseNum(value) {
 }
 
 export function baseMinutes(settings = DEFAULT_SETTINGS) {
-  return settings.shift - settings.brk;
+  return settings.normShift - settings.normBrk;
 }
 
 /**

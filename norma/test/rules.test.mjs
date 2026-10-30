@@ -47,6 +47,9 @@ function entry(email, date = '2026-10-30', patch = {}) {
     date,
     month: date.slice(0, 7),
     items: [{ productId: 'p1', name: 'Виріб', norm: 35, qty: 20 }],
+    shiftName: '1 зміна',
+    start: '06:30',
+    end: '14:30',
     shift: 480,
     brk: 60,
     base: 420,
@@ -59,6 +62,12 @@ function entry(email, date = '2026-10-30', patch = {}) {
     ...patch,
   };
 }
+
+const settings = {
+  normShift: 480,
+  normBrk: 60,
+  shifts: [{ id: 's1', name: '1 зміна', start: '06:30', end: '14:30', brk: 60 }],
+};
 
 const product = {
   name: 'Виріб А',
@@ -89,7 +98,7 @@ beforeEach(async () => {
     await setDoc(doc(db, 'access', WORKER2), { name: 'Працівник 2', role: 'worker', active: true });
     await setDoc(doc(db, 'access', BLOCKED), { name: 'Заблокований', role: 'admin', active: false });
     await setDoc(doc(db, 'products', 'p1'), product);
-    await setDoc(doc(db, 'settings', 'main'), { shift: 480, brk: 60 });
+    await setDoc(doc(db, 'settings', 'main'), settings);
     await setDoc(doc(db, 'entries', `2026-10-30_${WORKER}`), entry(WORKER));
     await setDoc(doc(db, 'entries', `2026-10-30_${WORKER2}`), entry(WORKER2));
   });
@@ -171,7 +180,7 @@ describe('працівник', () => {
     await assertFails(setDoc(doc(db, 'products', 'p2'), product));
     await assertFails(updateDoc(doc(db, 'products', 'p1'), { norm: 1 }));
     await assertFails(deleteDoc(doc(db, 'products', 'p1')));
-    await assertFails(setDoc(doc(db, 'settings', 'main'), { shift: 480, brk: 0 }));
+    await assertFails(setDoc(doc(db, 'settings', 'main'), { ...settings, normBrk: 0 }));
   });
 
   test('не бачить список доступу і не може себе підвищити', async () => {
@@ -225,11 +234,24 @@ describe('працівник', () => {
     await assertFails(setDoc(ref, entry(WORKER, '2026-10-28', { downtime: -5 })));
     // зайве поле
     await assertFails(setDoc(ref, entry(WORKER, '2026-10-28', { approved: true })));
+    // тривалість не відповідає часу зміни або час некоректний
+    await assertFails(setDoc(ref, entry(WORKER, '2026-10-28', { shift: 600 })));
+    await assertFails(setDoc(ref, entry(WORKER, '2026-10-28', { start: '6:30' })));
+    await assertFails(setDoc(ref, entry(WORKER, '2026-10-28', { end: '25:00' })));
     // email у верхньому регістрі
     await assertFails(
       setDoc(doc(db, 'entries', '2026-10-28_Worker@example.com'), entry('Worker@example.com', '2026-10-28')),
     );
     await assertSucceeds(setDoc(ref, entry(WORKER, '2026-10-28')));
+  });
+
+  test('різні зміни: подовжена, 12 годин, нічна', async () => {
+    const db = as(WORKER);
+    const save = (date, patch) => setDoc(doc(db, 'entries', `${date}_${WORKER}`), entry(WORKER, date, patch));
+    await assertSucceeds(save('2026-10-20', { shiftName: 'Перша подовжена', start: '06:30', end: '17:00', shift: 630 }));
+    await assertSucceeds(save('2026-10-21', { shiftName: '', start: '07:00', end: '19:00', shift: 720, brk: 90 }));
+    await assertSucceeds(save('2026-10-22', { shiftName: 'Нічна', start: '22:30', end: '06:30', shift: 480 }));
+    await assertFails(save('2026-10-23', { shiftName: 'Нічна', start: '22:30', end: '06:30', shift: 960 }));
   });
 });
 
@@ -242,9 +264,11 @@ describe('адміністратор', () => {
     await assertFails(setDoc(doc(db, 'products', 'p3'), { ...product, name: '' }));
     await assertFails(setDoc(doc(db, 'products', 'p3'), { ...product, secret: 1 }));
     await assertSucceeds(deleteDoc(doc(db, 'products', 'p2')));
-    await assertSucceeds(setDoc(doc(db, 'settings', 'main'), { shift: 720, brk: 60 }));
-    await assertFails(setDoc(doc(db, 'settings', 'main'), { shift: 60, brk: 60 }));
-    await assertFails(setDoc(doc(db, 'settings', 'other'), { shift: 480, brk: 60 }));
+    await assertSucceeds(setDoc(doc(db, 'settings', 'main'), { ...settings, normShift: 720 }));
+    await assertFails(setDoc(doc(db, 'settings', 'main'), { ...settings, normShift: 60 }));
+    await assertFails(setDoc(doc(db, 'settings', 'main'), { ...settings, shifts: 'x' }));
+    await assertFails(setDoc(doc(db, 'settings', 'main'), { ...settings, shift: 480 }));
+    await assertFails(setDoc(doc(db, 'settings', 'other'), settings));
   });
 
   test('видає і забирає доступ', async () => {

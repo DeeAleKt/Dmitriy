@@ -194,6 +194,17 @@ code {
   gap: 12px;
 }
 
+.grid3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.9fr;
+  gap: 10px;
+}
+
+.grid3 .input {
+  padding-left: 10px;
+  padding-right: 6px;
+}
+
 .mt {
   margin-top: 12px;
 }
@@ -877,6 +888,67 @@ main {
   font-size: 12px;
   color: var(--muted);
   font-weight: 600;
+}
+
+.chip-ico {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.datebar + .who-chip,
+.who-chip + .who-chip {
+  margin-top: -6px;
+}
+
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.preset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+}
+
+.preset > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.preset small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.preset.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.preset.on small {
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.group-title.flush {
+  padding: 14px 0 8px !important;
 }
 
 .who-chip.compact {
@@ -1618,6 +1690,17 @@ main {
   white-space: normal;
 }
 
+.shift-tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 650;
+  margin-right: 4px;
+}
+
 .entry-meta .ico {
   color: var(--warn);
 }
@@ -1810,13 +1893,14 @@ main {
 .toast {
   position: fixed;
   z-index: 60;
-  left: 50%;
+  left: 16px;
+  right: 16px;
+  margin: 0 auto;
+  width: fit-content;
   top: calc(12px + var(--safe-t));
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: calc(100% - 32px);
   padding: 12px 16px;
   border-radius: 14px;
   background: var(--text);
@@ -1838,7 +1922,7 @@ main {
 
 @keyframes drop {
   from {
-    transform: translate(-50%, -30px);
+    transform: translateY(-30px);
     opacity: 0;
   }
 }

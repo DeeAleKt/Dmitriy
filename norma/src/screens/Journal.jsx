@@ -11,6 +11,7 @@ import {
   fmtDateNum,
   fmtMin,
   fmtMonth,
+  fmtTime,
   fromISO,
   initials,
   monthRange,
@@ -251,22 +252,16 @@ function EntryList({ entries, showName, nameOf, onOpen }) {
                 <span class="entry-items">
                   {e.items.map((i) => `${i.name} × ${fmt(i.qty)}`).join(', ') || 'Без виробів'}
                 </span>
-                {(e.downtime > 0 || e.comment) && (
-                  <span class="entry-meta">
-                    {e.downtime > 0 && (
-                      <>
-                        <Icon name="pause" size={14} /> {fmtMin(e.downtime)}
-                        {e.reason && ` · ${e.reason}`}
-                      </>
-                    )}
-                    {e.comment && (
-                      <>
-                        {e.downtime > 0 && ' · '}
-                        {e.comment}
-                      </>
-                    )}
-                  </span>
-                )}
+                <span class="entry-meta">
+                  <span class="shift-tag">{e.shiftName || `${fmtTime(e.start)}–${fmtTime(e.end)}`}</span>
+                  {e.downtime > 0 && (
+                    <>
+                      <Icon name="pause" size={14} /> {fmtMin(e.downtime)}
+                      {e.reason && ` · ${e.reason}`}
+                    </>
+                  )}
+                  {e.comment && <> · {e.comment}</>}
+                </span>
               </span>
               <Pct value={p} />
             </button>

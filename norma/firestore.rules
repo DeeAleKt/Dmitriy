@@ -62,21 +62,32 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ---------- Налаштування зміни: settings/main ----------
+    // ---------- Налаштування: settings/main ----------
+    // normShift/normBrk — зміна, на яку задано норми; shifts — готові зміни (1 зміна, 2 зміна…)
     function validSettings(d) {
-      return d.keys().hasOnly(['shift', 'brk', 'updatedAt', 'updatedBy'])
-        && d.shift is number && d.shift > 0 && d.shift <= 1440
-        && d.brk is number && d.brk >= 0 && d.brk < d.shift;
+      return d.keys().hasOnly(['normShift', 'normBrk', 'shifts', 'updatedAt', 'updatedBy'])
+        && d.normShift is number && d.normShift > 0 && d.normShift <= 1440
+        && d.normBrk is number && d.normBrk >= 0 && d.normBrk < d.normShift
+        && d.shifts is list && d.shifts.size() <= 20;
     }
     match /settings/{id} {
       allow read: if hasAccess();
       allow create, update: if isAdmin() && id == 'main' && validSettings(request.resource.data);
     }
 
+    // ---------- Час зміни ----------
+    function validTime(t) { return t is string && t.matches('([01][0-9]|2[0-3]):[0-5][0-9]'); }
+    function toMin(t) { return int(t.split(':')[0]) * 60 + int(t.split(':')[1]); }
+    // Тривалість від початку до кінця; кінець раніше за початок — зміна через північ
+    function length(start, end) {
+      return toMin(end) > toMin(start) ? toMin(end) - toMin(start) : toMin(end) + 1440 - toMin(start);
+    }
+
     // ---------- Журнал: entries/{дата}_{email} ----------
     function validEntry(id, d) {
-      return d.keys().hasOnly(['email', 'name', 'date', 'month', 'items', 'shift', 'brk', 'base',
-                               'downtime', 'reason', 'comment', 'percent', 'updatedAt', 'updatedBy'])
+      return d.keys().hasOnly(['email', 'name', 'date', 'month', 'items', 'shiftName', 'start', 'end',
+                               'shift', 'brk', 'base', 'downtime', 'reason', 'comment', 'percent',
+                               'updatedAt', 'updatedBy'])
         && d.email is string && d.email == d.email.lower()
         && d.date is string && d.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
         && d.month is string && d.month.matches('[0-9]{4}-[0-9]{2}')
@@ -84,7 +95,9 @@ service cloud.firestore {
         && id == d.date + '_' + d.email
         && d.name is string && d.name.size() <= 120
         && d.items is list && d.items.size() <= 40
-        && d.shift is number && d.shift > 0 && d.shift <= 1440
+        && d.shiftName is string && d.shiftName.size() <= 60
+        && validTime(d.start) && validTime(d.end)
+        && d.shift is number && d.shift == length(d.start, d.end)
         && d.brk is number && d.brk >= 0
         && d.base is number && d.base > 0 && d.base <= 1440
         && d.downtime is number && d.downtime >= 0

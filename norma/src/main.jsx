@@ -1,7 +1,7 @@
 import './styles.css';
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { DEFAULT_SETTINGS } from './calc.js';
+import { normalizeSettings } from './calc.js';
 import { bootstrapOwner, watchAccess, watchPeople, watchProducts, watchSettings } from './data.js';
 import { configured, logOut, watchUser } from './firebase.js';
 import { Admin } from './screens/Admin.jsx';
@@ -54,7 +54,7 @@ function App() {
   useEffect(() => {
     if (!ok) return;
     const u1 = watchProducts(setProducts, setFatal);
-    const u2 = watchSettings((s) => setSettings(s || DEFAULT_SETTINGS), setFatal);
+    const u2 = watchSettings((s) => setSettings(normalizeSettings(s)), setFatal);
     return () => {
       u1();
       u2();

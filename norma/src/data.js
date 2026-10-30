@@ -108,8 +108,14 @@ export function watchSettings(cb, onError) {
   return onSnapshot(doc(db, 'settings', 'main'), (s) => cb(s.exists() ? s.data() : null), onError);
 }
 
-export const saveSettings = ({ shift, brk }, me) =>
-  setDoc(doc(db, 'settings', 'main'), { shift, brk, updatedAt: serverTimestamp(), updatedBy: me });
+export const saveSettings = ({ normShift, normBrk, shifts }, me) =>
+  setDoc(doc(db, 'settings', 'main'), {
+    normShift,
+    normBrk,
+    shifts: shifts.map(({ id, name, start, end, brk }) => ({ id, name: name.trim(), start, end, brk })),
+    updatedAt: serverTimestamp(),
+    updatedBy: me,
+  });
 
 // ---------- Журнал ----------
 
@@ -132,6 +138,9 @@ export function saveEntry(e, me) {
     date: e.date,
     month: monthOf(e.date),
     items,
+    shiftName: (e.shiftName || '').slice(0, 60),
+    start: e.start,
+    end: e.end,
     shift: e.shift,
     brk: e.brk,
     base: e.base,

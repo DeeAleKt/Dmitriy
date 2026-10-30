@@ -64,6 +64,9 @@ export function fmtMin(min) {
   return m ? `${h} год ${m} хв` : `${h} год`;
 }
 
+/** '06:30' → '6:30' */
+export const fmtTime = (t) => String(t || '').replace(/^0(\d)/, '$1');
+
 /** 390 → «6:30» */
 export function fmtHM(min) {
   min = Math.max(0, Math.round(min));

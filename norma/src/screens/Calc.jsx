@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { baseMinutes, computeDay, level, parseNum } from '../calc.js';
+import { baseMinutes, computeDay, level, parseNum, shiftLength } from '../calc.js';
 import { deleteEntry, getEntry, saveEntry } from '../data.js';
 import { ask, Empty, errText, Icon, Ring, Sheet, Spinner, Stepper, toast } from '../ui.jsx';
-import { addDays, collator, fmt, fmtDateLong, fmtDay, fmtHM, fmtMin, fmtPct, initials, store, today } from '../util.js';
+import { addDays, collator, fmt, fmtDateLong, fmtDay, fmtHM, fmtMin, fmtPct, fmtTime, initials, store, today } from '../util.js';
 
 let keySeq = 0;
 const newItem = (p) => ({
@@ -14,18 +14,26 @@ const newItem = (p) => ({
   qty: '',
 });
 
-function blank(settings) {
+const FALLBACK_SHIFT = { id: '', name: '', start: '08:00', end: '16:00', brk: 60 };
+
+function blank(settings, presetId) {
+  const p = settings.shifts.find((x) => x.id === presetId) || settings.shifts[0] || FALLBACK_SHIFT;
   return {
     items: [newItem()],
     downtime: '',
     reason: '',
     comment: '',
-    shift: settings.shift,
-    brk: settings.brk,
+    presetId: p.id,
+    start: p.start,
+    end: p.end,
+    brk: p.brk,
     base: baseMinutes(settings),
     custom: false,
   };
 }
+
+/** Назва зміни за часом початку і кінця (перерва на назву не впливає) */
+const presetFor = (shifts, start, end) => shifts.find((x) => x.start === start && x.end === end);
 
 function fromEntry(e) {
   return {
@@ -35,7 +43,8 @@ function fromEntry(e) {
     downtime: e.downtime ? String(e.downtime) : '',
     reason: e.reason || '',
     comment: e.comment || '',
-    shift: e.shift,
+    start: e.start,
+    end: e.end,
     brk: e.brk,
     base: e.base,
     custom: true,
@@ -52,7 +61,8 @@ const snapshot = (f) =>
     d: parseNum(f.downtime),
     r: f.reason.trim(),
     c: f.comment.trim(),
-    s: f.shift,
+    s: f.start,
+    e: f.end,
     b: f.brk,
   });
 
@@ -69,6 +79,7 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
   const [howOpen, setHowOpen] = useState(false);
   const dateInput = useRef();
 
+  const presetKey = `norma.shift.${me}`;
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const dirty = form && initial !== null && snapshot(form) !== initial;
 
@@ -82,7 +93,7 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
     getEntry(date, who)
       .then((e) => {
         if (cancelled) return;
-        const f = e ? fromEntry(e) : blank(settings);
+        const f = e ? fromEntry(e) : blank(settings, store(presetKey));
         setSaved(e);
         setForm(f);
         setInitial(snapshot(f));
@@ -90,7 +101,7 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
       .catch((err) => {
         if (cancelled) return;
         toast(errText(err), 'err');
-        const f = blank(settings);
+        const f = blank(settings, store(presetKey));
         setSaved(null);
         setForm(f);
         setInitial(snapshot(f));
@@ -100,12 +111,12 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
     };
   }, [date, who]);
 
-  // Новий (ще не збережений) запис підхоплює змінені налаштування зміни
+  // Новий (ще не збережений) запис підхоплює змінені адміністратором зміни і норму
   useEffect(() => {
     if (form && !saved && !form.custom) {
-      setForm((f) => ({ ...f, shift: settings.shift, brk: settings.brk, base: baseMinutes(settings) }));
+      setForm((f) => ({ ...blank(settings, f.presetId), items: f.items, downtime: f.downtime, reason: f.reason, comment: f.comment }));
     }
-  }, [settings.shift, settings.brk]);
+  }, [settings]);
 
   const guard = async (fn) => {
     if (dirty && !(await ask({ title: 'Є незбережені зміни', text: 'Перейти без збереження?', ok: 'Перейти', danger: true })))
@@ -138,9 +149,12 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
   const setItem = (key, patch) => set({ items: form.items.map((i) => (i.key === key ? { ...i, ...patch } : i)) });
   const dt = parseNum(form.downtime);
   const chosen = form.items.filter((i) => i.productId);
+  const shiftMin = shiftLength(form.start, form.end);
+  const preset = presetFor(settings.shifts, form.start, form.end);
+  const shiftName = preset?.name || '';
   const res = computeDay({
     items: chosen.map((i) => ({ norm: i.norm, qty: parseNum(i.qty) })),
-    shift: form.shift,
+    shift: shiftMin,
     brk: form.brk,
     downtime: dt,
     base: form.base,
@@ -149,7 +163,9 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
   const lv = level(res.percent);
 
   let status;
-  if (!res.valid) status = 'Простій не може бути більшим за робочий час';
+  if (!shiftMin) status = 'Вкажіть час початку і кінця зміни';
+  else if (shiftMin <= form.brk) status = 'Перерва не може бути довшою за зміну';
+  else if (!res.valid) status = 'Простій не може бути більшим за робочий час';
   else if (!chosen.length) status = 'Оберіть виріб і вкажіть кількість';
   else if (res.percent >= 99.95) {
     const extra = single ? parseNum(chosen[0].qty) - res.lines[0].dayNorm : 0;
@@ -176,7 +192,10 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
         name: whoName,
         date,
         items: chosen.map((i) => ({ ...i, qty: parseNum(i.qty) })),
-        shift: form.shift,
+        shiftName,
+        start: form.start,
+        end: form.end,
+        shift: shiftMin,
         brk: form.brk,
         base: form.base,
         downtime: dt,
@@ -201,7 +220,7 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
       return;
     try {
       await deleteEntry(date, who);
-      const f = blank(settings);
+      const f = blank(settings, store(presetKey));
       setSaved(null);
       setForm(f);
       setInitial(snapshot(f));
@@ -236,6 +255,17 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
         </button>
       )}
 
+      <button class="who-chip shift-chip" onClick={() => setShiftOpen(true)}>
+        <span class="chip-ico">
+          <Icon name="clock" size={18} />
+        </span>
+        <span>
+          <small>Зміна · перерва {fmtMin(form.brk)}</small>
+          {shiftName || 'Свій час'} · {fmtTime(form.start)}–{fmtTime(form.end)}
+        </span>
+        <Icon name="down" size={18} />
+      </button>
+
       <section class={`hero lv-${lv}`}>
         <div class="ring-box">
           <Ring percent={res.percent} />
@@ -267,7 +297,9 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
             <div class="stat">
               <span>Норма дня</span>
               <b>{single ? `${fmt(res.lines[0].dayNorm)} шт` : '—'}</b>
-              {single && (dt > 0 || form.shift - form.brk !== form.base) && <em>замість {fmt(chosen[0].norm)}</em>}
+              {single && res.valid && Math.abs(res.lines[0].dayNorm - chosen[0].norm) > 0.01 && (
+                <em>норма за зміну {fmt(chosen[0].norm)}</em>
+              )}
             </div>
           )}
           <div class="stat">
@@ -404,57 +436,6 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
       </section>
 
       <section class="card">
-        <button class="card-head as-btn" onClick={() => setShiftOpen(!shiftOpen)} aria-expanded={shiftOpen}>
-          <h3>
-            <Icon name="clock" /> Зміна
-          </h3>
-          <span class="muted">
-            {fmtMin(form.shift)}, перерва {fmtMin(form.brk)}
-            <Icon name="down" size={18} class={shiftOpen ? 'flip' : ''} />
-          </span>
-        </button>
-        {shiftOpen && (
-          <div class="shift-edit">
-            <p class="muted small">
-              Змінюйте лише для нестандартного дня (скорочена зміна, понаднормові). Норма завжди рахується на{' '}
-              {fmtMin(form.base)} чистого часу.
-            </p>
-            <div class="grid2">
-              <label class="field">
-                <span class="field-label">Тривалість зміни, год</span>
-                <input
-                  class="input"
-                  inputMode="decimal"
-                  value={fmtInput(Math.round((form.shift / 60) * 100) / 100)}
-                  onChange={(e) => {
-                    const h = parseNum(e.currentTarget.value);
-                    if (h > 0 && h <= 24) set({ shift: Math.round(h * 60), custom: true });
-                  }}
-                />
-              </label>
-              <label class="field">
-                <span class="field-label">Перерва, хв</span>
-                <input
-                  class="input"
-                  inputMode="numeric"
-                  value={String(form.brk)}
-                  onChange={(e) => {
-                    const b = Math.round(parseNum(e.currentTarget.value));
-                    if (b >= 0 && b < form.shift) set({ brk: b, custom: true });
-                  }}
-                />
-              </label>
-            </div>
-            {(form.shift !== settings.shift || form.brk !== settings.brk) && (
-              <button class="link" onClick={() => set({ shift: settings.shift, brk: settings.brk })}>
-                Повернути стандартну зміну ({fmtMin(settings.shift)}, перерва {fmtMin(settings.brk)})
-              </button>
-            )}
-          </div>
-        )}
-      </section>
-
-      <section class="card">
         <div class="card-head">
           <h3>
             <Icon name="note" /> Примітка
@@ -523,7 +504,30 @@ export function Calc({ me, myName, isAdmin, people, products, settings, request,
       </Sheet>
 
       <Sheet open={howOpen} title="Як пораховано" onClose={() => setHowOpen(false)}>
-        <How form={form} res={res} chosen={chosen} dt={dt} />
+        <How form={form} res={res} chosen={chosen} dt={dt} shiftMin={shiftMin} shiftName={shiftName} />
+      </Sheet>
+
+      <Sheet
+        open={shiftOpen}
+        title="Зміна"
+        onClose={() => setShiftOpen(false)}
+        footer={
+          <button class="btn primary block" onClick={() => setShiftOpen(false)}>
+            Готово
+          </button>
+        }
+      >
+        <ShiftPick
+          shifts={settings.shifts}
+          form={form}
+          shiftMin={shiftMin}
+          onPreset={(p) => {
+            set({ start: p.start, end: p.end, brk: p.brk, presetId: p.id, custom: true });
+            store(presetKey, p.id);
+            setShiftOpen(false);
+          }}
+          onChange={(patch) => set({ ...patch, custom: true })}
+        />
       </Sheet>
     </div>
   );
@@ -557,7 +561,64 @@ function DateBar({ date, isToday, onPrev, onNext, onPick, inputRef }) {
   );
 }
 
-function How({ form, res, chosen, dt }) {
+function ShiftPick({ shifts, form, shiftMin, onPreset, onChange }) {
+  return (
+    <>
+      <div class="presets">
+        {shifts.map((p) => {
+          const len = shiftLength(p.start, p.end);
+          const on = p.start === form.start && p.end === form.end;
+          return (
+            <button class={`preset ${on ? 'on' : ''}`} onClick={() => onPreset(p)} key={p.id}>
+              <span>
+                <b>{p.name}</b>
+                <small>
+                  {fmtTime(p.start)}–{fmtTime(p.end)} · перерва {fmtMin(p.brk)} · роботи {fmtMin(len - p.brk)}
+                </small>
+              </span>
+              {on && <Icon name="check" />}
+            </button>
+          );
+        })}
+      </div>
+      <h4 class="group-title flush">Час саме цього дня</h4>
+      <div class="grid2">
+        <label class="field">
+          <span class="field-label">Початок</span>
+          <input class="input" type="time" step="300" value={form.start} onChange={(e) => e.currentTarget.value && onChange({ start: e.currentTarget.value })} />
+        </label>
+        <label class="field">
+          <span class="field-label">Кінець</span>
+          <input class="input" type="time" step="300" value={form.end} onChange={(e) => e.currentTarget.value && onChange({ end: e.currentTarget.value })} />
+        </label>
+      </div>
+      <div class="grid2">
+        <label class="field">
+          <span class="field-label">Перерва, хв</span>
+          <input
+            class="input"
+            inputMode="numeric"
+            value={String(form.brk)}
+            onFocus={(e) => e.currentTarget.select()}
+            onInput={(e) => onChange({ brk: Math.min(600, Math.round(parseNum(e.currentTarget.value))) })}
+          />
+        </label>
+      </div>
+      <div class="base-box">
+        <span>
+          {fmtMin(shiftMin)} − перерва {fmtMin(form.brk)}
+        </span>
+        <b>{shiftMin > form.brk ? `${fmtMin(shiftMin - form.brk)} роботи` : '—'}</b>
+      </div>
+      <p class="muted small">
+        Норми виробів задані на {fmtMin(form.base)} чистого часу. На довшій зміні норма на день більша, на коротшій —
+        менша.
+      </p>
+    </>
+  );
+}
+
+function How({ form, res, chosen, dt, shiftMin, shiftName }) {
   return (
     <div class="how">
       <div class="how-row">
@@ -566,7 +627,8 @@ function How({ form, res, chosen, dt }) {
       </div>
       <div class="how-row">
         <span>
-          Сьогодні: зміна {fmtMin(form.shift)} − перерва {fmtMin(form.brk)}
+          {shiftName || 'Зміна'} {fmtTime(form.start)}–{fmtTime(form.end)} ({fmtMin(shiftMin)}) − перерва{' '}
+          {fmtMin(form.brk)}
           {dt > 0 && <> − простій {fmtMin(dt)}</>}
         </span>
         <b>{fmtMin(res.available)}</b>

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { computeDay, level, parseNum, summarize } from '../src/calc.js';
+import { baseMinutes, computeDay, level, normalizeSettings, parseNum, shiftLength, summarize } from '../src/calc.js';
 
 const day = (items, downtime = 0, extra = {}) => ({ items, shift: 480, brk: 60, base: 420, downtime, ...extra });
 const close = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
@@ -80,4 +80,30 @@ test('рівні кольорів', () => {
   assert.equal(level(99.96), 'good');
   assert.equal(level(85), 'warn');
   assert.equal(level(10), 'bad');
+});
+
+test('тривалість зміни за часом початку і кінця', () => {
+  assert.equal(shiftLength('06:30', '14:30'), 480);
+  assert.equal(shiftLength('14:30', '22:30'), 480);
+  assert.equal(shiftLength('06:30', '17:00'), 630);
+  assert.equal(shiftLength('08:00', '17:00'), 540);
+  assert.equal(shiftLength('22:30', '06:30'), 480); // через північ
+  assert.equal(shiftLength('07:00', '19:00'), 720);
+  assert.equal(shiftLength('08:00', '08:00'), 0);
+  assert.equal(shiftLength('', '08:00'), 0);
+});
+
+test('подовжена зміна: норма на день пропорційно більша', () => {
+  // 6:30–17:00, перерва 60 хв → 570 хв роботи; норма 35 на 420 хв → 47,5 шт
+  const r = computeDay({ items: [{ norm: 35, qty: 47.5 }], shift: shiftLength('06:30', '17:00'), brk: 60, base: 420 });
+  close(r.available, 570);
+  close(r.lines[0].dayNorm, 47.5);
+  close(r.percent, 100);
+});
+
+test('налаштування за замовчуванням: 4 зміни і норма на 7 год', () => {
+  const s = normalizeSettings(null);
+  assert.equal(s.shifts.length, 4);
+  assert.equal(baseMinutes(s), 420);
+  assert.deepEqual(s.shifts.map((x) => shiftLength(x.start, x.end)), [480, 480, 630, 540]);
 });

@@ -9,7 +9,7 @@ export function exportXlsx({ entries, range, nameOf }) {
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date) || nameOf(a.email).localeCompare(nameOf(b.email), 'uk'));
 
   const days = [
-    ['Дата', 'Працівник', 'Email', 'Вироби', 'Зроблено, шт', 'Зміна, хв', 'Перерва, хв', 'Простій, хв',
+    ['Дата', 'Працівник', 'Email', 'Зміна', 'Початок', 'Кінець', 'Вироби', 'Зроблено, шт', 'Тривалість зміни, хв', 'Перерва, хв', 'Простій, хв',
       'Причина простою', 'Робочий час, хв', 'Нормо-час, хв', 'Виконання, %', 'Примітка'],
   ];
   const items = [
@@ -19,7 +19,7 @@ export function exportXlsx({ entries, range, nameOf }) {
     const r = computeDay(e);
     const name = nameOf(e.email, e.name);
     days.push([
-      date(e.date), name, e.email,
+      date(e.date), name, e.email, e.shiftName || '', e.start || '', e.end || '',
       e.items.map((i) => `${i.name} × ${i.qty}`).join('; '),
       r.pieces, e.shift, e.brk, e.downtime, e.reason || '', r.available, r1(r.earned), dec(r.percent), e.comment || '',
     ]);
@@ -55,7 +55,7 @@ export function exportXlsx({ entries, range, nameOf }) {
 
   const bytes = buildXlsx([
     { name: 'Підсумок', widths: [28, 28, 8, 12, 12, 12, 12, 14, 11, 11], rows: summary },
-    { name: 'По днях', widths: [11, 26, 26, 40, 11, 10, 10, 10, 24, 12, 12, 12, 30], rows: days },
+    { name: 'По днях', widths: [11, 26, 26, 16, 9, 9, 40, 11, 12, 10, 10, 24, 12, 12, 12, 30], rows: days },
     { name: 'Вироби', widths: [11, 26, 32, 12, 12, 14, 12, 14], rows: items },
   ]);
   const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

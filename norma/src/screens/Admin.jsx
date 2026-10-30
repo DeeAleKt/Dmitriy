@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks';
-import { DEFAULT_SETTINGS, parseNum } from '../calc.js';
+import { parseNum, shiftLength } from '../calc.js';
 import { deletePerson, deleteProduct, importProducts, savePerson, saveProduct, saveSettings } from '../data.js';
 import { ask, Empty, errText, Field, Icon, Segmented, Sheet, Spinner, toast, Toggle } from '../ui.jsx';
-import { collator, fmt, fmtMin, initials, isEmail, normEmail } from '../util.js';
+import { collator, fmt, fmtMin, fmtTime, initials, isEmail, normEmail } from '../util.js';
 
 export function Admin({ me, products, people, settings }) {
   const [sec, setSec] = useState('products');
@@ -15,7 +15,7 @@ export function Admin({ me, products, people, settings }) {
           options={[
             { value: 'products', label: 'Вироби' },
             { value: 'people', label: 'Доступ' },
-            { value: 'shift', label: 'Зміна' },
+            { value: 'shift', label: 'Зміни' },
           ]}
         />
       </div>
@@ -501,39 +501,168 @@ function PersonSheet({ person, me, people, onClose }) {
   );
 }
 
-// ---------- Налаштування зміни ----------
+// ---------- Зміни і база норми ----------
 
 function ShiftSettings({ settings, me }) {
-  const [hours, setHours] = useState(String(settings.shift / 60).replace('.', ','));
-  const [brk, setBrk] = useState(String(settings.brk));
-  const [busy, setBusy] = useState(false);
-  const shift = Math.round(parseNum(hours) * 60);
-  const b = Math.round(parseNum(brk));
-  const ok = shift > 0 && shift <= 1440 && b >= 0 && b < shift;
-  const changed = shift !== settings.shift || b !== settings.brk;
-
-  async function save() {
-    setBusy(true);
+  const [edit, setEdit] = useState(null);
+  const save = async (patch, msg) => {
     try {
-      await saveSettings({ shift, brk: b }, me);
-      toast('Налаштування збережено');
+      await saveSettings({ ...settings, ...patch }, me);
+      toast(msg);
+      return true;
     } catch (e) {
       toast(errText(e), 'err');
-    } finally {
-      setBusy(false);
+      return false;
     }
+  };
+  return (
+    <>
+      <section class="card">
+        <div class="card-head">
+          <h3>
+            <Icon name="clock" /> Зміни
+          </h3>
+          <button class="btn soft sm" onClick={() => setEdit({})}>
+            <Icon name="plus" size={18} /> Додати
+          </button>
+        </div>
+        <p class="muted small">Працівник обирає зміну одним дотиком, а за потреби змінює час чи перерву саме для свого дня.</p>
+      </section>
+      <div class="card flush">
+        {settings.shifts.map((p) => {
+          const len = shiftLength(p.start, p.end);
+          return (
+            <button class="pick-row" onClick={() => setEdit(p)} key={p.id}>
+              <span>
+                <b>{p.name}</b>
+                <small>
+                  {fmtTime(p.start)}–{fmtTime(p.end)} · перерва {fmtMin(p.brk)}
+                </small>
+              </span>
+              <em>{fmtMin(len - p.brk)}</em>
+            </button>
+          );
+        })}
+      </div>
+      <NormBase settings={settings} save={save} />
+      {edit && (
+        <ShiftSheet
+          shift={edit}
+          settings={settings}
+          save={save}
+          onClose={() => setEdit(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function ShiftSheet({ shift, settings, save, onClose }) {
+  const isNew = !shift.id;
+  const [f, setF] = useState({
+    name: shift.name || '',
+    start: shift.start || '08:00',
+    end: shift.end || '16:00',
+    brk: String(shift.brk ?? 60),
+  });
+  const [busy, setBusy] = useState(false);
+  const len = shiftLength(f.start, f.end);
+  const brk = Math.round(parseNum(f.brk));
+  const ok = f.name.trim() && len > 0 && brk >= 0 && brk < len;
+
+  async function submit() {
+    if (!ok) return;
+    setBusy(true);
+    const item = { id: shift.id || Math.random().toString(36).slice(2, 8), name: f.name.trim().slice(0, 60), start: f.start, end: f.end, brk };
+    const shifts = isNew ? [...settings.shifts, item] : settings.shifts.map((x) => (x.id === shift.id ? item : x));
+    if (await save({ shifts }, isNew ? 'Зміну додано' : 'Зміну збережено')) onClose();
+    else setBusy(false);
+  }
+
+  async function remove() {
+    if (settings.shifts.length < 2) return toast('Має лишитися хоча б одна зміна', 'err');
+    if (!(await ask({ title: `Видалити «${shift.name}»?`, text: 'Уже збережені записи не зміняться.', ok: 'Видалити', danger: true }))) return;
+    if (await save({ shifts: settings.shifts.filter((x) => x.id !== shift.id) }, 'Зміну видалено')) onClose();
+  }
+
+  return (
+    <Sheet
+      open
+      title={isNew ? 'Нова зміна' : 'Зміна'}
+      onClose={onClose}
+      footer={
+        <button class="btn primary block" disabled={!ok || busy} onClick={submit}>
+          {busy ? <Spinner /> : isNew ? 'Додати зміну' : 'Зберегти'}
+        </button>
+      }
+    >
+      <form
+        class="form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <Field label="Назва *">
+          <input class="input" data-autofocus maxLength={60} placeholder="Напр.: 1 зміна" value={f.name} onInput={(e) => setF({ ...f, name: e.currentTarget.value })} />
+        </Field>
+        <div class="grid2">
+          <Field label="Початок">
+            <input class="input" type="time" step="300" value={f.start} onChange={(e) => e.currentTarget.value && setF({ ...f, start: e.currentTarget.value })} />
+          </Field>
+          <Field label="Кінець">
+            <input class="input" type="time" step="300" value={f.end} onChange={(e) => e.currentTarget.value && setF({ ...f, end: e.currentTarget.value })} />
+          </Field>
+        </div>
+        <Field label="Перерва, хв" hint="Загальна тривалість усіх перерв за зміну">
+          <input class="input" inputMode="numeric" value={f.brk} onInput={(e) => setF({ ...f, brk: e.currentTarget.value.replace(/[^\d]/g, '') })} />
+        </Field>
+        <div class="base-box">
+          <span>
+            Тривалість {fmtMin(len)}
+            {len && f.end <= f.start ? ' (через північ)' : ''}
+          </span>
+          <b>{ok ? `${fmtMin(len - brk)} роботи` : '—'}</b>
+        </div>
+        {!isNew && (
+          <button type="button" class="btn ghost block danger-text" onClick={remove}>
+            <Icon name="trash" size={18} /> Видалити зміну
+          </button>
+        )}
+        <button type="submit" hidden />
+      </form>
+    </Sheet>
+  );
+}
+
+function NormBase({ settings, save }) {
+  const [hours, setHours] = useState(String(settings.normShift / 60).replace('.', ','));
+  const [brk, setBrk] = useState(String(settings.normBrk));
+  const [busy, setBusy] = useState(false);
+  const normShift = Math.round(parseNum(hours) * 60);
+  const normBrk = Math.round(parseNum(brk));
+  const ok = normShift > 0 && normShift <= 1440 && normBrk >= 0 && normBrk < normShift;
+  const changed = normShift !== settings.normShift || normBrk !== settings.normBrk;
+
+  async function submit() {
+    setBusy(true);
+    await save({ normShift, normBrk }, 'Збережено');
+    setBusy(false);
   }
 
   return (
     <section class="card">
       <div class="card-head">
         <h3>
-          <Icon name="clock" /> Стандартна зміна
+          <Icon name="box" /> На який час задано норми
         </h3>
       </div>
-      <p class="muted small">Норми виробів задаються саме на таку зміну. Ці значення підставляються в кожен новий запис.</p>
+      <p class="muted small">
+        Норма виробу в довіднику — це кількість штук за таку зміну. Від неї рахується норма на будь-яку іншу
+        зміну: довша зміна — більша норма на день.
+      </p>
       <div class="grid2">
-        <Field label="Тривалість зміни, год">
+        <Field label="Зміна, год">
           <input class="input" inputMode="decimal" value={hours} onInput={(e) => setHours(e.currentTarget.value)} />
         </Field>
         <Field label="Перерва, хв">
@@ -541,30 +670,17 @@ function ShiftSettings({ settings, me }) {
         </Field>
       </div>
       <div class="base-box">
-        <span>Чистий робочий час за нормою</span>
-        <b>{ok ? `${fmtMin(shift - b)} (${shift - b} хв)` : '—'}</b>
+        <span>Чистий час, на який задано норми</span>
+        <b>{ok ? `${fmtMin(normShift - normBrk)} (${normShift - normBrk} хв)` : '—'}</b>
       </div>
       {changed && (
         <p class="small warn-text">
-          Зміна торкнеться лише нових записів. Уже збережені дні рахуються за тими значеннями, що діяли тоді.
+          Це змінить норму на день для всіх нових записів. Уже збережені дні рахуються за значеннями, що діяли тоді.
         </p>
       )}
-      <div class="row">
-        {(settings.shift !== DEFAULT_SETTINGS.shift || settings.brk !== DEFAULT_SETTINGS.brk) && (
-          <button
-            class="btn ghost"
-            onClick={() => {
-              setHours('8');
-              setBrk('60');
-            }}
-          >
-            8 год / 60 хв
-          </button>
-        )}
-        <button class="btn primary grow" disabled={!ok || !changed || busy} onClick={save}>
-          {busy ? <Spinner /> : 'Зберегти'}
-        </button>
-      </div>
+      <button class="btn primary block" disabled={!ok || !changed || busy} onClick={submit}>
+        {busy ? <Spinner /> : 'Зберегти'}
+      </button>
     </section>
   );
 }
