@@ -147,7 +147,7 @@ export function loadAll(todayISO) {
   settings = normalizeSettings(settings);
   let days = read(K.days, {});
   if (!days || typeof days !== 'object' || Array.isArray(days)) days = {};
-  if (!validDraft(draft)) draft = newDraft(todayISO, settings, days);
+  if (!validDraft(draft)) draft = days[todayISO] ? draftFromRecord(days[todayISO]) : newDraft(todayISO, settings, days);
   if (migrated) {
     saveSettings(settings);
     saveDraft(draft);

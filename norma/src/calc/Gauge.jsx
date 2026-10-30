@@ -1,5 +1,5 @@
 // Шкала-«манометр» від 0 до 150 %: позначка норми на 100 %, окрема — на особистій меті.
-import { fmt } from '../util.js';
+import { pctText } from './model.js';
 import { useTween } from './ui.jsx';
 
 const CX = 120;
@@ -60,7 +60,7 @@ export function Gauge({ pct, goal = 100, sub = 'виконання норми' }
       </svg>
       <div class="g-center">
         <div class="g-num">
-          {fmt(shown, 1)}
+          {pctText(shown, 1)}
           <small>%</small>
         </div>
         <div class="g-sub">{sub}</div>

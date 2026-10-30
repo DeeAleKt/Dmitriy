@@ -227,6 +227,25 @@ const core = (r) =>
 
 export const sameRecord = (a, b) => core(a) === core(b);
 
+// ---------- Неправдоподібні дні ----------
+
+export const ODD_PCT = 250;
+
+/** Відсоток для тісних місць: від 1000 % — «999+», щоб не ламати розмітку. */
+export const pctText = (p, d = 1) => (!Number.isFinite(p) ? '—' : p >= 1000 ? '999+' : fmt(p, d));
+
+/**
+ * Відсоток, якого майже не буває насправді, — найчастіше помилка: простій забрав майже всю зміну,
+ * неправильний вхід/вихід або зайва цифра в кількості. Повертає причину для підказки або null.
+ */
+export function oddDay(c) {
+  if (!c?.valid || !c.hasInput || c.pct <= ODD_PCT) return null;
+  if (c.downMin > 0 && c.avail < c.workMin * 0.25)
+    return { why: 'down', text: `Простій (${fmtMin(c.downMin)}) забирає майже всю зміну — робочого часу лишилось ${fmtMin(c.avail)}` };
+  if (c.workMin < 150) return { why: 'time', text: `Робочого часу лише ${fmtMin(c.avail)} — перевірте вхід, вихід і перерву` };
+  return { why: 'qty', text: 'Перевірте кількість і норму виробу — можливо, зайва цифра' };
+}
+
 // ---------- Приблизні норми ----------
 // Поки офіційної норми на виріб немає, можна ввести приблизну (approx: true) —
 // відсоток тоді орієнтовний, а коли норма зʼявиться, дні з приблизною нормою перераховуються.
@@ -304,7 +323,7 @@ export function bestDay(days) {
   let best = null;
   for (const r of Object.values(days)) {
     const c = computeDay(r, r.base || 420);
-    if (c.valid && (!best || c.pct > best.pct)) best = { date: r.date, pct: c.pct };
+    if (c.valid && !oddDay(c) && (!best || c.pct > best.pct)) best = { date: r.date, pct: c.pct };
   }
   return best;
 }
@@ -332,6 +351,7 @@ export function summarize(records, goal = 100) {
   const perf = new Map();
   let lostPieces = 0;
   let approxDays = 0;
+  const odd = []; // неправдоподібні дні (не стають рекордом, показуються з попередженням)
   const wd = Array.from({ length: 7 }, () => ({ earned: 0, avail: 0, n: 0 }));
   const days = [];
   const acc = (map, key, c) => {
@@ -356,7 +376,8 @@ export function summarize(records, goal = 100) {
       goalDays++;
       maxRun = Math.max(maxRun, ++run);
     } else run = 0;
-    if (!best || c.pct > best.pct) best = { date: r.date, pct: c.pct };
+    if (oddDay(c)) odd.push({ date: r.date, pct: c.pct });
+    else if (!best || c.pct > best.pct) best = { date: r.date, pct: c.pct };
     if (!worst || c.pct < worst.pct) worst = { date: r.date, pct: c.pct };
     for (const d of r.downtime || []) add(down, d.reason || 'Інше', pos(d.min));
     for (const o of r.others || []) add(other, o.kind || 'Інше', pos(o.min));
@@ -403,6 +424,7 @@ export function summarize(records, goal = 100) {
     perf: rate(perf),
     lostPieces,
     approxDays,
+    odd,
     last10: { n: last.length, goal: last.filter((d) => d.pct >= goal - 0.05).length },
   };
 }

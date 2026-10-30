@@ -399,3 +399,22 @@ test('приблизна норма: зберігається, позначає�
   // уточнили, але ще не остаточно — позначка лишається
   assert.equal(applyNorm(days, 'Кришка', 38, false).next['2026-10-28'].products[0].approx, true);
 });
+
+test('неправдоподібний відсоток: скорочений показ, причина, не рекорд', async () => {
+  const { oddDay, pctText, bestDay } = await import('../src/calc/model.js');
+  assert.equal(pctText(37333.3), '999+');
+  assert.equal(pctText(104.44), '104,4');
+  // простій 6 год 58 хв: лишилось 2 хв, 80 шт при нормі 45 → 37 333 %
+  const bad = { ...rec('2026-10-30', 80), products: [{ name: 'Кришка', norm: 45, qty: 80 }], downtime: [{ reason: 'Поломка', min: 418 }] };
+  const c = computeDay(bad, 420);
+  close(c.pct, (80 * 420) / 45 / 2 * 100);
+  assert.equal(oddDay(c).why, 'down');
+  assert.equal(oddDay(computeDay({ ...rec('2026-10-30', 40), end: '08:30' }, 420)).why, 'time'); // вихід о 8:30 → 1 год роботи
+  assert.equal(oddDay(computeDay(rec('2026-10-30', 350), 420)).why, 'qty'); // зайвий нуль
+  assert.equal(oddDay(computeDay(rec('2026-10-30', 40), 420)), null);
+  const days = { '2026-10-28': rec('2026-10-28', 40), '2026-10-30': bad };
+  assert.equal(bestDay(days).date, '2026-10-28');
+  const s = summarize(Object.values(days));
+  assert.deepEqual(s.odd.map((d) => d.date), ['2026-10-30']);
+  assert.equal(s.best.date, '2026-10-28');
+});

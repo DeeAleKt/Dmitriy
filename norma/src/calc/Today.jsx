@@ -17,10 +17,12 @@ import {
   level,
   minutesLabel,
   newKey,
+  oddDay,
   num,
   openDayOf,
   OTHER_MINUTES,
   paceAt,
+  pctText,
   rankInMonth,
   sameRecord,
   shiftLength,
@@ -113,6 +115,7 @@ export function Today() {
   const pace = useMemo(() => paceAt(draft, res, now), [draft, res, now]);
   const lv = res.hasInput && res.valid ? level(res.pct, goal) : 'idle';
   const status = statusOf(res, goal, base);
+  const odd = oddDay(res);
   const [sheet, setSheet] = useState(null);
   const [tip, setTip] = useState(() => !store(TIP_KEY) && !Object.keys(days).length);
   const title = dateTitle(draft.date);
@@ -123,7 +126,7 @@ export function Today() {
   useEffect(() => {
     const was = prev.current;
     prev.current = { date: draft.date, pct: res.pct };
-    if (was.date !== draft.date || !res.hasInput || !res.valid || res.pct <= was.pct) return;
+    if (was.date !== draft.date || !res.hasInput || !res.valid || res.pct <= was.pct || oddDay(res)) return;
     const others = Object.fromEntries(Object.entries(days).filter(([d, r]) => d !== draft.date && !r.sample));
     const best = Object.keys(others).length >= 5 ? bestDay(others) : null;
     const key = draft.date;
@@ -221,6 +224,24 @@ export function Today() {
           <span>{status.text}</span>
         </p>
         {isApprox(record) && <p class="panel-approx">≈ Орієнтовно: норма виробу поки приблизна</p>}
+        {odd && (
+          <div class="pace attention odd">
+            <Icon name="info" size={18} />
+            <span>
+              <b>{fmt(res.pct, 0)}% — схоже на помилку.</b> {odd.text}.{' '}
+              <button
+                class="link inline"
+                onClick={() =>
+                  odd.why === 'time'
+                    ? setSheet({ type: 'shift' })
+                    : document.querySelector(odd.why === 'down' ? '.tcard-down' : '.pitem .step-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+              >
+                Перевірити
+              </button>
+            </span>
+          </div>
+        )}
         <div class="panel-stats">
           <div>
             <span>Робочий час</span>
@@ -332,7 +353,7 @@ export function Today() {
 
       {isToday && <MonthCard days={days} settings={settings} date={draft.date} res={res} onGoal={() => setSheet({ type: 'mgoal' })} />}
 
-      <DayContext days={days} date={draft.date} record={record} res={res} goal={goal} isToday={isToday} />
+      {!odd && <DayContext days={days} date={draft.date} record={record} res={res} goal={goal} isToday={isToday} />}
 
       {!blank && (
         <button class="text-btn" onClick={clearDay}>
@@ -694,14 +715,14 @@ function DayContext({ days, date, record, res, goal, isToday }) {
   const monthName = MONTHS_GEN[fromISO(date).getMonth()];
   return (
     <section class="card">
-      <CardHead icon="chart" title={isToday ? 'Сьогодні серед інших днів' : 'Цей день серед інших'} aside={`${fmt(pct, 1)}%`} />
+      <CardHead icon="chart" title={isToday ? 'Сьогодні серед інших днів' : 'Цей день серед інших'} aside={`${pctText(pct)}%`} />
       <div class="ctx-grid">
         {tiles.map((t) => {
           const d = pct - t.value;
           return (
             <div class="ctx-tile">
               <span class="ctx-label">{t.label}</span>
-              <b class="ctx-value">{fmt(t.value, 1)}%</b>
+              <b class="ctx-value">{pctText(t.value)}%</b>
               <span class="ctx-sub">{t.sub}</span>
               {t.best && isRecord ? (
                 <span class="ctx-delta up">
@@ -770,7 +791,7 @@ function ProductItem({ p, idx, line, res, onChange, onRemove, onPick, onFix }) {
       <div class="pmeter">
         <div class="pm-row">
           <span>Норма на сьогодні {fmt(line.dayNorm)} шт</span>
-          <b class={`lv-text ${lvl}`}>{fmt(line.pct, 1)}%</b>
+          <b class={`lv-text ${lvl}`}>{pctText(line.pct)}%</b>
         </div>
         <div class={`bar lv-${lvl}`}>
           <i style={{ width: `${Math.min(100, line.pct)}%` }} />
@@ -841,7 +862,7 @@ function ProductItem({ p, idx, line, res, onChange, onRemove, onPick, onFix }) {
 function TimeCard({ kind, items, total, onAdd, onEdit, onRemove }) {
   const down = kind === 'down';
   return (
-    <section class="card">
+    <section class={`card tcard-${kind}`}>
       <CardHead icon={down ? 'pause' : 'wrench'} tone={down ? 'warn' : 'teal'} title={down ? 'Простій' : 'Інші роботи'} aside={total > 0 ? `${down ? '−' : '+'}${fmtMin(total)}` : null} />
       {!items.length && (
         <p class="card-hint">

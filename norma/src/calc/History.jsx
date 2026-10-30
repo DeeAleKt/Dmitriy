@@ -1,7 +1,7 @@
 import { useMemo } from 'preact/hooks';
 import { fmt, fmtMin, fmtTime, fromISO, plural } from '../util.js';
 import { useApp } from './ctx.js';
-import { computeDay, isApprox, level, summarize } from './model.js';
+import { computeDay, isApprox, level, oddDay, pctText, summarize } from './model.js';
 import { Breakdown, copyText, summaryText } from './Today.jsx';
 import { ask, Empty, Icon, Sheet, toast } from './ui.jsx';
 
@@ -70,7 +70,7 @@ export function History() {
               </h2>
               <span>
                 {g.s.n} {plural(g.s.n, ['день', 'дні', 'днів'])} ·{' '}
-                <b class={`lv-text ${lv}`}>{fmt(g.s.pct, 1)}%</b>
+                <b class={`lv-text ${lv}`}>{pctText(g.s.pct)}%</b>
               </span>
             </div>
             <div class="card flush">
@@ -105,7 +105,7 @@ export function History() {
                         </span>
                       )}
                     </span>
-                    <span class={`pill lv-${l}`}>{c.valid ? `${isApprox(r) ? '≈' : ''}${fmt(c.pct, 1)}%` : '—'}</span>
+                    <span class={`pill lv-${l} ${oddDay(c) ? 'odd' : ''}`}>{c.valid ? `${oddDay(c) ? '⚠ ' : isApprox(r) ? '≈' : ''}${pctText(c.pct)}%` : '—'}</span>
                   </button>
                 );
               })}
@@ -162,12 +162,20 @@ export function DaySheet({ date, onClose }) {
       <div class={`day-hero lv-${lv}`}>
         <b>
           {isApprox(r) ? '≈' : ''}
-          {fmt(res.pct, 1)}%
+          {pctText(res.pct)}%
         </b>
         <span>
           {!res.valid ? 'Неповні дані' : diff >= -0.05 ? (goal === 100 ? 'Норму виконано' : `Мету ${goal}% досягнуто`) : `На ${fmt(-diff, 1)}% нижче ${goal === 100 ? 'норми' : 'мети'}`}
         </span>
       </div>
+      {oddDay(res) && (
+        <div class="tip warn">
+          <Icon name="info" size={18} />
+          <span>
+            <b>{fmt(res.pct, 0)}% — схоже на помилку.</b> {oddDay(res).text}. Відкрийте день у розрахунку й виправте — тоді й середнє стане правильним.
+          </span>
+        </div>
+      )}
       <Breakdown day={r} res={res} base={r.base || 420} />
       <button class="btn soft block" onClick={() => copyText(summaryText(r, res))}>
         <Icon name="copy" size={18} /> Скопіювати підсумок дня

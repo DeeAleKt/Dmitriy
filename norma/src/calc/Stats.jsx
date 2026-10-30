@@ -15,6 +15,7 @@ import {
   moveAnchor,
   movingAvg,
   openDayOf,
+  pctText,
   periodOf,
   recordsIn,
   streak,
@@ -134,6 +135,7 @@ export function Stats() {
             </section>
           ) : (
             <>
+              <OddBanner items={cur.odd} onDay={openDay} />
               <ApproxBanner n={cur.approxDays} onFix={setFixName} />
               <Summary cur={cur} prev={prev} goal={mstat ? mstat.goal : goal} mode={mode} mstat={mstat} live={isCurrent && open} onGoal={() => setGoalSheet(true)} />
 
@@ -143,7 +145,7 @@ export function Stats() {
                   icon="trophy"
                   tone="good"
                   label="Рекорд"
-                  value={best ? fmt(best.pct, 1) : '—'}
+                  value={best ? pctText(best.pct) : '—'}
                   unit="%"
                   sub={best ? fmtShortDate(best.date) : ''}
                   onClick={best ? () => openDay(best.date) : null}
@@ -229,7 +231,7 @@ function Summary({ cur, prev, goal, mode, mstat, live, onGoal }) {
       </div>
       <div class="sum-row">
         <div class={`sum-num lv-text ${lv}`}>
-          {fmt(pct, 1)}
+          {pctText(pct)}
           <small>%</small>
         </div>
         {mstat && (
@@ -321,7 +323,7 @@ function MonthCalendar({ anchor, days, goal, onDay, onEmpty }) {
               aria-label={`${fromISO(d).getDate()}: ${c?.valid ? `${fmt(c.pct, 1)}%` : 'немає запису'}`}
             >
               <span class="cal-num">{fromISO(d).getDate()}</span>
-              {c?.valid && <span class="cal-pct">{fmt(c.pct, 0)}</span>}
+              {c?.valid && <span class="cal-pct">{pctText(c.pct, 0)}</span>}
             </button>
           );
         })}
@@ -437,7 +439,7 @@ function Trend({ mode, period, recs, goal, ma, trend, onDay }) {
               onClick={() => setSel(sel === s.key ? null : s.key)}
               aria-label={s.title}
             >
-              {s.v != null && <i class={`cbar lv-${level(s.v, goal)}`} style={{ height: `${Math.max(3, (s.v / max) * 100)}%` }} />}
+              {s.v != null && <i class={`cbar lv-${level(s.v, goal)} ${s.v > max ? 'clip' : ''}`} style={{ height: `${Math.min(100, Math.max(3, (s.v / max) * 100))}%` }} />}
             </button>
           ))}
         </div>
@@ -458,6 +460,30 @@ function Trend({ mode, period, recs, goal, ma, trend, onDay }) {
         </button>
       )}
     </section>
+  );
+}
+
+/** Дні з неправдоподібним відсотком: показати й дати швидко відкрити. */
+function OddBanner({ items, onDay }) {
+  if (!items?.length) return null;
+  return (
+    <div class="odd-banner">
+      <div class="approx-banner-top">
+        <Icon name="info" size={18} />
+        <span>
+          {items.length === 1 ? 'Один день має' : `${items.length} ${plural(items.length, ['день має', 'дні мають', 'днів мають'])}`} неправдоподібно
+          великий відсоток — схоже на помилку в простої, часі чи кількості. Такий день сильно завищує середнє; рекордом він не рахується.
+        </span>
+      </div>
+      <div class="approx-chips">
+        {items.map((d) => (
+          <button class="approx-chip" onClick={() => onDay(d.date)}>
+            {fmtShortDate(d.date)} <em>{pctText(d.pct, 0)}%</em>
+            <Icon name="right" size={13} />
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -493,7 +519,7 @@ function Weeks({ items, goal }) {
                 <i class={`lv-${lv}`} style={{ width: `${(w.pct / max) * 100}%` }} />
                 <em style={{ left: `${(goal / max) * 100}%` }} />
               </span>
-              <b>{fmt(w.pct, 1)}%</b>
+              <b>{pctText(w.pct)}%</b>
               <span class={`week-delta ${w.delta == null || Math.abs(w.delta) < 0.05 ? '' : w.delta > 0 ? 'up' : 'down'}`}>
                 {w.delta == null ? '' : `${w.delta > 0 ? '+' : w.delta < 0 ? '−' : '±'}${fmt(Math.abs(w.delta), 1)}`}
               </span>

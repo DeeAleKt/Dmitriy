@@ -620,6 +620,20 @@ input::placeholder {
 .pace.attention {
   background: color-mix(in srgb, var(--p-warn) 18%, transparent);
 }
+.pace.odd {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--p-bad) 22%, transparent);
+  line-height: 1.4;
+}
+.pace.odd .ico {
+  flex: none;
+  margin-top: 1px;
+  color: #ffb4b4;
+}
+.pace.odd .link {
+  color: #fff;
+  text-decoration: underline;
+}
 .pace.live {
   flex-direction: column;
   align-items: stretch;
@@ -2317,6 +2331,9 @@ input::placeholder {
   background: var(--bad-soft);
   color: var(--bad);
 }
+.sum-row .sum-num {
+  min-width: 0;
+}
 .sum-row {
   display: flex;
   align-items: flex-end;
@@ -2477,9 +2494,13 @@ input::placeholder {
   color: var(--faint);
 }
 .cal-pct {
+  max-width: 100%;
   margin-top: 8px;
+  overflow: hidden;
+  white-space: nowrap;
   font-size: 13.5px;
   font-weight: 800;
+  letter-spacing: -0.02em;
 }
 .cal-cell.today {
   box-shadow: inset 0 0 0 2px var(--accent);
@@ -2586,6 +2607,12 @@ input::placeholder {
   display: flex;
   align-items: flex-end;
   gap: 3px;
+}
+.chart-bars .cbar.clip {
+  /* стовпчик вищий за шкалу — обрізаний «зубцем» угорі */
+  border-radius: 0 0 2px 2px;
+  -webkit-mask: linear-gradient(135deg, transparent 4px, #000 4.5px) top left / 51% 8px no-repeat, linear-gradient(225deg, transparent 4px, #000 4.5px) top right / 51% 8px no-repeat, linear-gradient(#000, #000) 0 8px / 100% calc(100% - 8px) no-repeat;
+  mask: linear-gradient(135deg, transparent 4px, #000 4.5px) top left / 51% 8px no-repeat, linear-gradient(225deg, transparent 4px, #000 4.5px) top right / 51% 8px no-repeat, linear-gradient(#000, #000) 0 8px / 100% calc(100% - 8px) no-repeat;
 }
 .chart-bars.week {
   gap: 10px;
@@ -3486,4 +3513,34 @@ input::placeholder {
 }
 .ctx-notes .ico {
   color: var(--warn);
+}
+
+/* ---------- Неправдоподібні дні ---------- */
+.odd-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--bad-soft);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.odd-banner .approx-banner-top > .ico {
+  flex: none;
+  margin-top: 1px;
+  color: var(--bad);
+}
+.odd-banner .approx-chip em {
+  color: var(--bad);
+}
+.pill.odd {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.tip.warn {
+  background: var(--bad-soft);
+}
+.tip.warn > .ico {
+  color: var(--bad);
 }

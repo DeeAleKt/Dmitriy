@@ -1,7 +1,7 @@
 // Мета на календарний місяць: картка з підказками і вікно, де мету задають.
 import { useMemo, useState } from 'preact/hooks';
 import { fmt, fmtMin, plural } from '../util.js';
-import { level, monthGoalOf, monthStatus, num, openDayOf, withDay } from './model.js';
+import { level, monthGoalOf, monthStatus, num, openDayOf, pctText, withDay } from './model.js';
 import { cleanNum, Icon, Sheet, Toggle } from './ui.jsx';
 
 export const MONTHS_NOM = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
@@ -106,7 +106,8 @@ export function Hints({ items }) {
 
 /** Шкала середнього за місяць з позначкою мети. */
 export function MonthBar({ pct, live, goal }) {
-  const scale = Math.max(goal * 1.3, pct || 0, live || 0, 1);
+  // шкала до 2× мети: один неправдоподібний день не стискає позначку мети в куток
+  const scale = Math.max(goal * 1.3, Math.min(Math.max(pct || 0, live || 0), goal * 2));
   const lv = pct == null ? 'idle' : level(pct, goal);
   return (
     <div class="mbar">
@@ -141,7 +142,7 @@ export function MonthCard({ days, settings, date, res, onGoal }) {
         </button>
       </div>
       <div class="month-main">
-        <b class={`month-pct lv-text ${lv}`}>{m.pct == null ? '—' : fmt(m.pct, 1)}%</b>
+        <b class={`month-pct lv-text ${lv}`}>{m.pct == null ? '—' : pctText(m.pct)}%</b>
         {m.pct != null && <span class={`ctx-delta ${m.pct >= m.goal - 0.05 ? 'up' : 'down'}`}>{signed(m.pct - m.goal)} до мети</span>}
       </div>
       <p class="month-sub">
@@ -151,7 +152,7 @@ export function MonthCard({ days, settings, date, res, onGoal }) {
       <MonthBar pct={m.pct} live={live} goal={m.goal} />
       {live != null && (
         <p class="month-live">
-          <i /> З сьогоднішнім днем зараз — <b>{fmt(live, 1)}%</b>
+          <i /> З сьогоднішнім днем зараз — <b>{pctText(live)}%</b>
         </p>
       )}
       <Hints items={hints} />
