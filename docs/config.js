@@ -1,19 +1,9 @@
-// Підключення «Норми» до вашого проєкту Firebase (акаунти працівників, база, адмін-панель).
-//
-// Замініть блок `const firebaseConfig = { ... };` нижче на той, що показує
-// Firebase Console → ⚙ Project settings → General → Your apps → Web app → SDK setup and configuration → Config.
-//
-// Ці значення НЕ є секретом — так задумано у Firebase. Дані захищають правила доступу
-// (norma/firestore.rules): кожен бачить лише свої дні, адміністратор — усіх.
-// Поки тут заглушка, калькулятор працює без акаунтів, з даними лише на телефоні.
-
-const firebaseConfig = {
-  apiKey: 'ВСТАВТЕ_СЮДИ',
-  authDomain: 'ВСТАВТЕ_СЮДИ.firebaseapp.com',
-  projectId: 'ВСТАВТЕ_СЮДИ',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
-};
-
-window.NORMA_CONFIG = { firebase: firebaseConfig };
+// Згенеровано під час публікації з проєкту Firebase «lgbt-norma». Не секрет — дані захищають правила доступу.
+window.NORMA_CONFIG = { firebase: {
+  "apiKey": "AIzaSyAHAe30dhnw3PkCAm1clSXbK_p_8WXvS3I",
+  "authDomain": "lgbt-norma.firebaseapp.com",
+  "projectId": "lgbt-norma",
+  "storageBucket": "lgbt-norma.firebasestorage.app",
+  "messagingSenderId": "881716845932",
+  "appId": "1:881716845932:web:9b0b91f775bf39e1b7a749"
+} };
