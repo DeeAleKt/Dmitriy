@@ -94,7 +94,9 @@ export function normalizeSettings(s) {
           .map((x) => ({ id: x.id || newKey(), name: String(x.name || '').trim() || 'Зміна', start: x.start, end: x.end, brk: pos(x.brk) }))
       : d.shifts,
     products: Array.isArray(s?.products)
-      ? s.products.filter((p) => p && pos(p.norm) > 0).map((p) => ({ id: p.id || newKey(), name: String(p.name || '').trim(), norm: pos(p.norm) }))
+      ? s.products
+          .filter((p) => p && pos(p.norm) > 0)
+          .map((p) => ({ id: p.id || newKey(), name: String(p.name || '').trim(), norm: pos(p.norm), ...(p.approx ? { approx: true } : {}) }))
       : [],
     downReasons: list(s?.downReasons, d.downReasons),
     otherKinds: list(s?.otherKinds, d.otherKinds),
@@ -127,7 +129,7 @@ export function computeDay(day, base = 420) {
     const dayNorm = norm > 0 ? (norm * prodTime) / base : 0;
     prodEarned += minutes;
     pieces += norm > 0 ? qty : 0;
-    return { name: String(p.name || ''), norm, qty, minutes, dayNorm, pct: dayNorm > 0 ? (qty / dayNorm) * 100 : 0 };
+    return { name: String(p.name || ''), norm, qty, minutes, dayNorm, pct: dayNorm > 0 ? (qty / dayNorm) * 100 : 0, approx: !!p.approx };
   });
   const earned = valid ? prodEarned + otherMin : 0;
   const pct = valid ? (earned / avail) * 100 : 0;
@@ -214,7 +216,7 @@ export function toRecord(draft, base) {
     base,
     products: (draft.products || [])
       .filter((p) => pos(p.norm) > 0)
-      .map((p) => ({ name: String(p.name || '').trim(), norm: pos(p.norm), qty: pos(p.qty) })),
+      .map((p) => ({ name: String(p.name || '').trim(), norm: pos(p.norm), qty: pos(p.qty), ...(p.approx ? { approx: true } : {}) })),
     downtime: (draft.downtime || []).filter((d) => pos(d.min) > 0).map((d) => ({ reason: d.reason || 'Інше', min: pos(d.min) })),
     others: (draft.others || []).filter((o) => pos(o.min) > 0).map((o) => ({ kind: o.kind || 'Інше', min: pos(o.min) })),
   };
@@ -224,6 +226,55 @@ const core = (r) =>
   r && JSON.stringify([r.date, r.shiftName, r.start, r.end, r.brk, r.base, r.products, r.downtime, r.others]);
 
 export const sameRecord = (a, b) => core(a) === core(b);
+
+// ---------- Приблизні норми ----------
+// Поки офіційної норми на виріб немає, можна ввести приблизну (approx: true) —
+// відсоток тоді орієнтовний, а коли норма зʼявиться, дні з приблизною нормою перераховуються.
+
+/** У дні є виріб із приблизною нормою, який впливає на відсоток. */
+export const isApprox = (r) => (r?.products || []).some((p) => p.approx && pos(p.norm) > 0 && pos(p.qty) > 0);
+
+/** Вироби з приблизною нормою: у скількох днях, за який період, яка норма зараз. */
+export function approxProducts(days, settings = null) {
+  const map = new Map();
+  const get = (name) => map.get(name) || map.set(name, { name, norm: null, days: 0, from: null, to: null }).get(name);
+  for (const r of Object.values(days).sort((a, b) => a.date.localeCompare(b.date)))
+    for (const p of r.products || [])
+      if (p.approx && p.name && pos(p.norm) > 0) {
+        const e = get(p.name);
+        e.norm = pos(p.norm);
+        if (pos(p.qty) > 0) {
+          e.days++;
+          e.from = e.from || r.date;
+          e.to = r.date;
+        }
+      }
+  for (const p of settings?.products || []) if (p.approx && p.name) get(p.name).norm = get(p.name).norm ?? p.norm;
+  return [...map.values()].sort((a, b) => b.days - a.days || a.name.localeCompare(b.name));
+}
+
+/**
+ * Уточнити норму виробу в історії: усі рядки з цією назвою і приблизною нормою отримують нову норму
+ * (exact — і стають точними). Повертає нові дні та перелік змінених дат.
+ */
+export function applyNorm(days, name, norm, exact = true, now = Date.now()) {
+  const next = { ...days };
+  const changed = [];
+  for (const [d, r] of Object.entries(days)) {
+    if (!(r.products || []).some((p) => p.approx && p.name === name)) continue;
+    next[d] = {
+      ...r,
+      savedAt: now,
+      products: r.products.map((p) => {
+        if (!(p.approx && p.name === name)) return p;
+        const { approx: _, ...rest } = p;
+        return exact ? { ...rest, norm } : { ...p, norm };
+      }),
+    };
+    changed.push(d);
+  }
+  return { next, changed: changed.sort() };
+}
 
 /** Порожня чернетка: нічого не введено (норми без кількості не рахуються). */
 export const isBlank = (draft) =>
@@ -280,6 +331,7 @@ export function summarize(records, goal = 100) {
   const shifts = new Map();
   const perf = new Map();
   let lostPieces = 0;
+  let approxDays = 0;
   const wd = Array.from({ length: 7 }, () => ({ earned: 0, avail: 0, n: 0 }));
   const days = [];
   const acc = (map, key, c) => {
@@ -293,6 +345,7 @@ export function summarize(records, goal = 100) {
     const c = computeDay(r, r.base || 420);
     if (!c.valid) continue;
     days.push({ date: r.date, pct: c.pct, pieces: c.pieces, rec: r, c });
+    if (isApprox(r)) approxDays++;
     earned += c.earned;
     avail += c.avail;
     workMin += c.workMin;
@@ -349,6 +402,7 @@ export function summarize(records, goal = 100) {
     shifts: rate(shifts),
     perf: rate(perf),
     lostPieces,
+    approxDays,
     last10: { n: last.length, goal: last.filter((d) => d.pct >= goal - 0.05).length },
   };
 }
@@ -441,6 +495,7 @@ export function monthStatus(days, month, todayISO, goal, workdays = WORKDAYS, op
     needPct,
     reached: s.n > 0 && s.pct >= goal - 0.05,
     closed: todayISO > to,
+    approxDays: s.approxDays,
   };
 }
 

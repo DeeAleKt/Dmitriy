@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { fmt, fmtMin, fmtTime, plural } from '../util.js';
 import { useApp } from './ctx.js';
 import { backup, exportExcel, readBackup } from './files.js';
-import { DEFAULT_DOWN, DEFAULT_OTHER, makeSample, newKey, num, shiftLength } from './model.js';
+import { applyNorm, DEFAULT_DOWN, DEFAULT_OTHER, makeSample, newKey, num, shiftLength } from './model.js';
 import { ask, cleanNum, Icon, Segmented, Sheet, toast, Toggle } from './ui.jsx';
 import { today } from '../util.js';
 
@@ -151,7 +151,10 @@ export function Settings({ onClose }) {
                 <span class="srow-main">
                   <b>{p.name || 'Без назви'}</b>
                 </span>
-                <em>{fmt(p.norm)} шт/зміну</em>
+                <em>
+                  {p.approx ? '≈' : ''}
+                  {fmt(p.norm)} шт/зміну
+                </em>
                 <Icon name="right" size={16} class="faint" />
               </button>
             ))}
@@ -408,13 +411,30 @@ function ShiftEdit({ item, onClose }) {
 }
 
 function ProductEdit({ item, onClose }) {
-  const { setSettings } = useApp();
+  const { setSettings, days, setDays } = useApp();
   const [name, setName] = useState(item?.name || '');
   const [norm, setNorm] = useState(item ? String(item.norm).replace('.', ',') : '');
+  const [approx, setApprox] = useState(!!item?.approx);
   const ok = num(norm) > 0;
-  function save() {
-    const x = { id: item?.id || newKey(), name: name.trim(), norm: num(norm) };
+  async function save() {
+    const x = { id: item?.id || newKey(), name: name.trim(), norm: num(norm), ...(approx ? { approx: true } : {}) };
     setSettings((s) => ({ ...s, products: item ? s.products.map((y) => (y.id === item.id ? x : y)) : [...s.products, x] }));
+    // була приблизна норма і її уточнили — запропонувати перерахувати дні з нею
+    if (item?.approx && item.name && (num(norm) !== item.norm || !approx)) {
+      const { next, changed } = applyNorm(days, item.name, num(norm), !approx);
+      if (changed.length) {
+        const n = changed.length;
+        const ok = await ask({
+          title: `Перерахувати ${n} ${plural(n, ['день', 'дні', 'днів'])}?`,
+          text: `У ці дні «${item.name}» рахувався з приблизною нормою. Перерахувати їх з нормою ${fmt(num(norm))} шт${approx ? ' (теж приблизною)' : ''}?`,
+          ok: 'Перерахувати',
+        });
+        if (ok) {
+          setDays(next);
+          toast(`Перераховано ${n} ${plural(n, ['день', 'дні', 'днів'])}`, 'ok', 'check');
+        }
+      }
+    }
     onClose();
   }
   async function remove() {
@@ -448,6 +468,12 @@ function ProductEdit({ item, onClose }) {
         <span class="field-label">Норма за зміну, шт</span>
         <input class="input big" inputMode="decimal" placeholder="Напр.: 35" value={norm} onInput={(e) => setNorm(cleanNum(e.currentTarget.value))} />
       </label>
+      <Toggle
+        label="Норма приблизна"
+        hint="Поки офіційної норми немає. Коли зʼявиться — вимкніть і впишіть точну: дні з цим виробом можна буде перерахувати"
+        checked={approx}
+        onChange={setApprox}
+      />
     </Sheet>
   );
 }

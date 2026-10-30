@@ -34,7 +34,9 @@ export function monthHints(m, today = null) {
     if (!m.closed) out.push({ icon: 'calendar', text: `Середнє зʼявиться після першої завершеної зміни. Мета — ${fmt(g, 0)}% у середньому за місяць.` });
     return out;
   }
+  const approx = m.approxDays ? { icon: 'info', text: `≈ ${m.approxDays} ${plural(m.approxDays, ['день', 'дні', 'днів'])} пораховано з приблизною нормою — середнє орієнтовне` } : null;
   if (m.closed) {
+    if (approx) out.push(approx);
     out.push(
       m.reached
         ? { icon: 'trophy', tone: 'good', text: `Місяць закрито на ${fmt(m.pct, 1)}% — мету ${fmt(g, 0)}% досягнуто` }
@@ -42,6 +44,7 @@ export function monthHints(m, today = null) {
     );
     return out;
   }
+  if (approx) out.push(approx);
   if (m.short > 0.5) out.push({ icon: 'target', tone: 'warn', text: `До мети бракує ${fmt(g - m.pct, 1)}% — це ${fmtMin(m.short)} нормо-часу понад звичайну роботу` });
   else out.push({ icon: 'sparkle', tone: 'good', text: `Ви на ${fmt(m.pct - g, 1)}% вище мети — запас ${fmtMin(-m.short)} нормо-часу` });
   if (m.rest > 0 && m.needPct != null) {

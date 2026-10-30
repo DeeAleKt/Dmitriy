@@ -24,6 +24,7 @@ import {
   WEEKDAYS_SHORT,
 } from './model.js';
 import { Hints, monthHints, MonthGoalSheet } from './Month.jsx';
+import { ApproxBanner, NormFixSheet } from './Norms.jsx';
 import { CardHead, Empty, Icon, Segmented, toast } from './ui.jsx';
 
 const MODES = [
@@ -36,6 +37,7 @@ const MODE_WORD = { week: 'тиждень', month: 'місяць', year: 'рік
 export function Stats() {
   const { settings, setSettings, days, setDays, openDay, switchDate, openSettings } = useApp();
   const [goalSheet, setGoalSheet] = useState(false);
+  const [fixName, setFixName] = useState(null);
   const [mode, setMode] = useState('month');
   const [anchor, setAnchor] = useState(today());
   const goal = settings.goal;
@@ -132,6 +134,7 @@ export function Stats() {
             </section>
           ) : (
             <>
+              <ApproxBanner n={cur.approxDays} onFix={setFixName} />
               <Summary cur={cur} prev={prev} goal={mstat ? mstat.goal : goal} mode={mode} mstat={mstat} live={isCurrent && open} onGoal={() => setGoalSheet(true)} />
 
               <div class="tiles">
@@ -186,6 +189,7 @@ export function Stats() {
               {cur.other.length > 0 && <Reasons title="Інші роботи" icon="wrench" tone="teal" items={cur.other} />}
               {cur.products.length > 0 && <Products items={cur.products} />}
 
+              {fixName && <NormFixSheet name={fixName} onClose={() => setFixName(null)} />}
               {goalSheet && <MonthGoalSheet month={month} days={days} settings={settings} setSettings={setSettings} todayISO={t} onClose={() => setGoalSheet(false)} />}
 
               <button

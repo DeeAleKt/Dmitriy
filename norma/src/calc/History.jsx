@@ -1,7 +1,7 @@
 import { useMemo } from 'preact/hooks';
 import { fmt, fmtMin, fmtTime, fromISO, plural } from '../util.js';
 import { useApp } from './ctx.js';
-import { computeDay, level, summarize } from './model.js';
+import { computeDay, isApprox, level, summarize } from './model.js';
 import { Breakdown, copyText, summaryText } from './Today.jsx';
 import { ask, Empty, Icon, Sheet, toast } from './ui.jsx';
 
@@ -105,7 +105,7 @@ export function History() {
                         </span>
                       )}
                     </span>
-                    <span class={`pill lv-${l}`}>{c.valid ? `${fmt(c.pct, 1)}%` : '—'}</span>
+                    <span class={`pill lv-${l}`}>{c.valid ? `${isApprox(r) ? '≈' : ''}${fmt(c.pct, 1)}%` : '—'}</span>
                   </button>
                 );
               })}
@@ -160,7 +160,10 @@ export function DaySheet({ date, onClose }) {
       }
     >
       <div class={`day-hero lv-${lv}`}>
-        <b>{fmt(res.pct, 1)}%</b>
+        <b>
+          {isApprox(r) ? '≈' : ''}
+          {fmt(res.pct, 1)}%
+        </b>
         <span>
           {!res.valid ? 'Неповні дані' : diff >= -0.05 ? (goal === 100 ? 'Норму виконано' : `Мету ${goal}% досягнуто`) : `На ${fmt(-diff, 1)}% нижче ${goal === 100 ? 'норми' : 'мети'}`}
         </span>

@@ -5,12 +5,14 @@ import { backup, BACKUP_KEY } from './files.js';
 import { buzz, confetti } from './fx.js';
 import { Gauge } from './Gauge.jsx';
 import { MonthCard, MonthGoalSheet } from './Month.jsx';
+import { NormFixSheet } from './Norms.jsx';
 import {
   bestDay,
   compareDay,
   computeDay,
   DOWN_MINUTES,
   fmtShortDate,
+  isApprox,
   isBlank,
   level,
   minutesLabel,
@@ -26,7 +28,7 @@ import {
   toGoal,
   toRecord,
 } from './model.js';
-import { ask, CardHead, cleanNum, Icon, Sheet, Stepper, toast } from './ui.jsx';
+import { ask, CardHead, cleanNum, Icon, Sheet, Stepper, toast, Toggle } from './ui.jsx';
 
 const WEEKDAYS = ['неділя', 'понеділок', 'вівторок', 'середа', 'четвер', 'пʼятниця', 'субота'];
 const MONTHS_GEN = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
@@ -46,10 +48,10 @@ export function summaryText(day, res) {
   const lines = [
     `${WEEKDAYS[d.getDay()].charAt(0).toUpperCase() + WEEKDAYS[d.getDay()].slice(1)}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()]} · ${day.shiftName || 'зміна'}: вхід ${fmtTime(day.start)}, вихід ${fmtTime(day.end)}`,
   ];
-  for (const l of res.active) lines.push(`${l.name || 'Виріб'}: ${fmt(l.qty)} шт (норма ${fmt(l.norm)} за зміну)`);
+  for (const l of res.active) lines.push(`${l.name || 'Виріб'}: ${fmt(l.qty)} шт (норма ${l.approx ? '≈' : ''}${fmt(l.norm)} за зміну${l.approx ? ', приблизна' : ''})`);
   for (const x of day.downtime || []) lines.push(`Простій: ${x.reason} — ${fmtMin(num(x.min))}`);
   for (const x of day.others || []) lines.push(`Інші роботи: ${x.kind} — ${fmtMin(num(x.min))}`);
-  lines.push(`Виконання норми: ${fmt(res.pct, 1)}%`);
+  lines.push(`Виконання норми: ${res.active.some((l) => l.approx && l.qty > 0) ? '≈' : ''}${fmt(res.pct, 1)}%`);
   return lines.join('\n');
 }
 
@@ -148,7 +150,7 @@ export function Today() {
     let target;
     setDraft((d) => {
       const empty = d.products.find((p) => !p.name && !num(p.norm) && !num(p.qty));
-      const filled = from ? { name: from.name, norm: String(from.norm).replace('.', ',') } : {};
+      const filled = from ? { name: from.name, norm: String(from.norm).replace('.', ','), approx: !!from.approx } : {};
       if (empty && from) {
         target = empty.key;
         return { ...d, products: d.products.map((p) => (p === empty ? { ...p, ...filled } : p)) };
@@ -218,6 +220,7 @@ export function Today() {
           <Icon name={status.icon} size={18} />
           <span>{status.text}</span>
         </p>
+        {isApprox(record) && <p class="panel-approx">≈ Орієнтовно: норма виробу поки приблизна</p>}
         <div class="panel-stats">
           <div>
             <span>Робочий час</span>
@@ -285,6 +288,7 @@ export function Today() {
               onChange={(x) => setProduct(p.key, x)}
               onRemove={() => removeProduct(p)}
               onPick={() => setSheet({ type: 'product', key: p.key })}
+              onFix={() => setSheet({ type: 'norm', key: p.key, name: p.name.trim() })}
             />
           ))}
         </div>
@@ -298,7 +302,10 @@ export function Today() {
               {settings.products.map((sp) => (
                 <button class="qchip" key={sp.id} onClick={() => addProduct(sp)}>
                   <span>{sp.name || 'Без назви'}</span>
-                  <em>{fmt(sp.norm)}</em>
+                  <em>
+                    {sp.approx ? '≈' : ''}
+                    {fmt(sp.norm)}
+                  </em>
                 </button>
               ))}
             </div>
@@ -353,6 +360,7 @@ export function Today() {
           <Breakdown day={draft} res={res} base={base} />
         </Sheet>
       )}
+      {sheet?.type === 'norm' && <NormFixSheet name={sheet.name} lineKey={sheet.key} onClose={() => setSheet(null)} />}
       {sheet?.type === 'mgoal' && (
         <MonthGoalSheet month={draft.date.slice(0, 7)} days={days} settings={settings} setSettings={setSettings} todayISO={today()} onClose={() => setSheet(null)} />
       )}
@@ -726,12 +734,36 @@ function DayContext({ days, date, record, res, goal, isToday }) {
 
 // ---------- Виріб ----------
 
-function ProductItem({ p, idx, line, res, onChange, onRemove, onPick }) {
+function ProductItem({ p, idx, line, res, onChange, onRemove, onPick, onFix }) {
   const norm = num(p.norm);
   const single = res.active.length === 1 && norm > 0;
   const lvl = single && line ? level(line.pct, 100) : 'idle';
+  const focusNorm = () => setTimeout(() => document.querySelector(`[data-pkey="${p.key}"] .numbox input`)?.focus(), 30);
   let meter = null;
-  if (!norm) meter = <p class="pm-hint">Вкажіть норму за зміну — і побачите відсоток</p>;
+  if (!norm && p.approx)
+    meter = (
+      <p class="pm-hint">
+        Впишіть приблизну норму — коли зʼявиться точна, її можна буде уточнити.{' '}
+        <button class="link inline" onClick={() => onChange({ approx: false })}>
+          Скасувати
+        </button>
+      </p>
+    );
+  else if (!norm)
+    meter = (
+      <p class="pm-hint">
+        Вкажіть норму за зміну — і побачите відсоток.{' '}
+        <button
+          class="link inline"
+          onClick={() => {
+            onChange({ approx: true });
+            focusNorm();
+          }}
+        >
+          Норми ще немає?
+        </button>
+      </p>
+    );
   else if (!res.valid) meter = null;
   else if (single)
     meter = (
@@ -773,7 +805,8 @@ function ProductItem({ p, idx, line, res, onChange, onRemove, onPick }) {
       <div class="pitem-grid">
         <label class="mini">
           <span class="mini-label">Норма за зміну</span>
-          <span class="numbox">
+          <span class={`numbox ${p.approx ? 'approx' : ''}`}>
+            {p.approx && <i class="approx-sign">≈</i>}
             <input
               inputMode="decimal"
               value={p.norm}
@@ -791,6 +824,14 @@ function ProductItem({ p, idx, line, res, onChange, onRemove, onPick }) {
         </div>
       </div>
       {meter}
+      {p.approx && norm > 0 && (
+        <div class="approx-note">
+          <span>Норма приблизна — відсоток орієнтовний</span>
+          <button class="btn soft small" onClick={onFix}>
+            Уточнити
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1107,9 +1148,9 @@ function ProductSheet({ item, settings, setSettings, days, onApply, onClose }) {
   const needle = q.trim().toLowerCase();
   const list = needle ? saved.filter((s) => s.name.toLowerCase().includes(needle)) : saved;
   const canSave = name.trim() && norm > 0 && !saved.some((s) => s.name === name.trim() && s.norm === norm);
-  const save = (p) => setSettings((s) => ({ ...s, products: [...s.products, { id: newKey(), name: p.name.trim(), norm: p.norm }] }));
+  const save = (p) => setSettings((s) => ({ ...s, products: [...s.products, { id: newKey(), name: p.name.trim(), norm: p.norm, ...(p.approx ? { approx: true } : {}) }] }));
   const apply = (p) => {
-    onApply({ name: p.name, norm: String(p.norm).replace('.', ',') });
+    onApply({ name: p.name, norm: String(p.norm).replace('.', ','), approx: !!p.approx });
     onClose();
   };
   return (
@@ -1138,13 +1179,20 @@ function ProductSheet({ item, settings, setSettings, days, onApply, onClose }) {
         <button
           class="link"
           onClick={() => {
-            save({ name, norm });
+            save({ name, norm, approx: item.approx });
             onApply({ name: name.trim() });
           }}
         >
-          <Icon name="bookmark" size={16} /> Зберегти «{name.trim()}» · {fmt(norm)} шт у мої вироби
+          <Icon name="bookmark" size={16} /> Зберегти «{name.trim()}» · {item.approx ? '≈' : ''}
+          {fmt(norm)} шт у мої вироби
         </button>
       )}
+      <Toggle
+        label="Норма приблизна"
+        hint="Поки офіційної норми немає. Коли зʼявиться — уточните, і дні з цим виробом перерахуються"
+        checked={!!item.approx}
+        onChange={(v) => onApply({ approx: v })}
+      />
 
       {saved.length > 0 && (
         <>
@@ -1159,7 +1207,10 @@ function ProductSheet({ item, settings, setSettings, days, onApply, onClose }) {
             {list.map((sp) => (
               <button class="lrow" key={sp.id} onClick={() => apply(sp)}>
                 <span class="lrow-name">{sp.name || 'Без назви'}</span>
-                <em>{fmt(sp.norm)} шт</em>
+                <em>
+                  {sp.approx ? '≈' : ''}
+                  {fmt(sp.norm)} шт
+                </em>
               </button>
             ))}
             {!list.length && <p class="hint">Нічого не знайдено</p>}
@@ -1175,7 +1226,10 @@ function ProductSheet({ item, settings, setSettings, days, onApply, onClose }) {
               <div class="lrow split">
                 <button class="lrow-main" onClick={() => apply(p)}>
                   <span class="lrow-name">{p.name}</span>
-                  <em>{fmt(p.norm)} шт</em>
+                  <em>
+                    {p.approx ? '≈' : ''}
+                    {fmt(p.norm)} шт
+                  </em>
                 </button>
                 <button class="icon-btn" onClick={() => save(p)} aria-label={`Зберегти ${p.name}`}>
                   <Icon name="bookmark" size={17} />
@@ -1243,7 +1297,8 @@ export function Breakdown({ day, res, base }) {
             <div class="bd-item">
               <b>{l.name || 'Виріб'}</b>
               <span>
-                Норма {fmt(l.norm)} шт на {fmtMin(base)} → на сьогодні {fmt(l.norm)} × {Math.round(res.prodTime)} / {base} ={' '}
+                Норма {l.approx ? '≈' : ''}
+                {fmt(l.norm)} шт{l.approx ? ' (приблизна)' : ''} на {fmtMin(base)} → на сьогодні {fmt(l.norm)} × {Math.round(res.prodTime)} / {base} ={' '}
                 <b>{fmt(l.dayNorm)} шт</b>
               </span>
               <span>

@@ -366,3 +366,36 @@ test('новий день: зміна з попереднього, а вхід �
   assert.equal(c.workMin, 405);
   close(c.lines[0].dayNorm, 33.75);
 });
+
+test('приблизна норма: зберігається, позначається і уточнюється з перерахунком', async () => {
+  const { applyNorm, approxProducts, isApprox } = await import('../src/calc/model.js');
+  const draft = { ...day({ date: '2026-10-28', products: [{ name: 'Кришка', norm: '30', qty: '30', approx: true }] }) };
+  const r = toRecord(draft, 420);
+  assert.equal(r.products[0].approx, true);
+  assert.equal(isApprox(r), true);
+  // зміна лише позначки — це зміна запису (автозбереження її помітить)
+  assert.equal(sameRecord(r, toRecord({ ...draft, products: [{ ...draft.products[0], approx: false }] }, 420)), false);
+  assert.equal(normalizeSettings({ products: [{ name: 'Кришка', norm: 30, approx: true }] }).products[0].approx, true);
+
+  const days = {
+    '2026-10-27': { ...rec('2026-10-27', 30), products: [{ name: 'Кришка', norm: 30, qty: 30, approx: true }] },
+    '2026-10-28': r,
+    '2026-10-29': { ...rec('2026-10-29', 35), products: [{ name: 'Кришка', norm: 35, qty: 35 }] }, // точна — не чіпаємо
+  };
+  const list = approxProducts(days);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].days, 2);
+  assert.equal(list[0].from, '2026-10-27');
+  close(computeDay(days['2026-10-27'], 420).pct, 100);
+
+  const { next, changed } = applyNorm(days, 'Кришка', 40, true, 123);
+  assert.deepEqual(changed, ['2026-10-27', '2026-10-28']);
+  assert.equal(next['2026-10-27'].products[0].norm, 40);
+  assert.equal(next['2026-10-27'].products[0].approx, undefined);
+  assert.equal(next['2026-10-27'].savedAt, 123);
+  close(computeDay(next['2026-10-27'], 420).pct, 75); // 30 шт при нормі 40
+  assert.equal(next['2026-10-29'], days['2026-10-29']);
+  assert.equal(approxProducts(next).length, 0);
+  // уточнили, але ще не остаточно — позначка лишається
+  assert.equal(applyNorm(days, 'Кришка', 38, false).next['2026-10-28'].products[0].approx, true);
+});

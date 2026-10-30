@@ -49,7 +49,7 @@ export function draftFromRecord(r) {
     end: r.end,
     brk: r.brk,
     products: r.products.length
-      ? r.products.map((p) => ({ key: newKey(), name: p.name || '', norm: str(p.norm), qty: str(p.qty) }))
+      ? r.products.map((p) => ({ key: newKey(), name: p.name || '', norm: str(p.norm), qty: str(p.qty), ...(p.approx ? { approx: true } : {}) }))
       : [{ key: newKey(), name: '', norm: '', qty: '' }],
     downtime: r.downtime.map((d) => ({ key: newKey(), reason: d.reason, min: d.min })),
     others: r.others.map((o) => ({ key: newKey(), kind: o.kind, min: o.min })),
@@ -77,7 +77,7 @@ export function newDraft(date, settings, days) {
     end: src.end,
     brk: src.brk,
     products: prev?.products?.length
-      ? prev.products.map((p) => ({ key: newKey(), name: p.name || '', norm: str(p.norm), qty: '' }))
+      ? prev.products.map((p) => ({ key: newKey(), name: p.name || '', norm: str(p.norm), qty: '', ...(p.approx ? { approx: true } : {}) }))
       : [{ key: newKey(), name: '', norm: '', qty: '' }],
     downtime: [],
     others: [],

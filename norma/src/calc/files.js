@@ -56,7 +56,9 @@ export async function exportExcel(records, period, goal = 100) {
       r1(c.earned),
       { v: r1(c.pct), s: STYLE.decimal },
     ]);
-    c.lines.forEach((l) => items.push([{ v: excelDate(r.date), s: STYLE.date }, l.name || 'Виріб', l.norm, r1(l.dayNorm), l.qty, r1(l.minutes)]));
+    c.lines.forEach((l) =>
+      items.push([{ v: excelDate(r.date), s: STYLE.date }, `${l.name || 'Виріб'}${l.approx ? ' (норма приблизна)' : ''}`, l.norm, r1(l.dayNorm), l.qty, r1(l.minutes)]),
+    );
   }
   const months = [['Місяць', 'Днів', 'З нормою', 'Середнє, %', 'Виробів, шт', 'Простій, хв', 'Інші роботи, хв']];
   const byMonth = new Map();
