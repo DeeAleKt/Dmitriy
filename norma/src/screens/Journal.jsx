@@ -71,7 +71,7 @@ export function Journal({ me, myName, isAdmin, people, onOpen }) {
 
   async function doExport() {
     try {
-      exportXlsx({ entries, range, nameOf });
+      await exportXlsx({ entries, range, nameOf });
     } catch (e) {
       toast(errText(e), 'err');
     }

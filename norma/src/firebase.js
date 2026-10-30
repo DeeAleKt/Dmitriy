@@ -20,6 +20,9 @@ const cfg = emulator
   ? { apiKey: 'demo-key', authDomain: 'demo-norma.firebaseapp.com', projectId: 'demo-norma', appId: 'demo' }
   : userConfig;
 
+export const demo = false;
+export const demoApi = null;
+
 export const configured = Boolean(cfg?.apiKey && cfg?.projectId && !/[А-ЯІЇЄҐа-яіїєґ]/.test(cfg.apiKey));
 
 export let auth = null;

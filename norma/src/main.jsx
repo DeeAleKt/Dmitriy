@@ -3,7 +3,7 @@ import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { normalizeSettings } from './calc.js';
 import { bootstrapOwner, watchAccess, watchPeople, watchProducts, watchSettings } from './data.js';
-import { configured, logOut, watchUser } from './firebase.js';
+import { configured, demo, demoApi, logOut, watchUser } from './firebase.js';
 import { Admin } from './screens/Admin.jsx';
 import { Login, NoAccess, NotConfigured, PageError, Splash } from './screens/Auth.jsx';
 import { Calc } from './screens/Calc.jsx';
@@ -76,6 +76,7 @@ function App() {
 
   return (
     <Shell
+      key={email}
       user={user}
       me={email}
       myName={access.name || user.displayName || email}
@@ -123,6 +124,7 @@ function Shell({ user, me, myName, isAdmin, products, settings, people }) {
         <div class="brand">
           <Logo size={30} />
           <span>Норма</span>
+          {demo && <span class="tag demo-tag">демо</span>}
         </div>
         <button class="avatar-btn" onClick={() => setAccount(true)} aria-label="Акаунт">
           {user.photoURL ? (
@@ -200,6 +202,57 @@ export function applyTheme(t) {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0a0d14' : '#f3f4f8');
 }
 
+function DemoPanel({ me, onClose }) {
+  const [people, setPeople] = useState([]);
+  useEffect(() => (demo ? watchPeople(setPeople) : undefined), []);
+  return (
+    <>
+      <div class="card notice">
+        <Icon name="info" />
+        <p class="small">
+          Демо-режим: усі вироби, люди й записи вигадані та зберігаються лише в цьому браузері. Вхід через Google і
+          захист даних увімкнуться після підключення Firebase.
+        </p>
+      </div>
+      <div class="field">
+        <span class="field-label">Подивитися програму очима</span>
+        <div class="presets">
+          {people
+            .filter((p) => p.active || p.owner)
+            .sort((a, b) => (b.owner ? 2 : b.role === 'admin') - (a.owner ? 2 : a.role === 'admin'))
+            .map((p) => (
+              <button
+                class={`preset ${p.email === me ? 'on' : ''}`}
+                key={p.email}
+                onClick={() => {
+                  onClose();
+                  demoApi.signInAs(p.email);
+                }}
+              >
+                <span>
+                  <b>{p.name}</b>
+                  <small>{p.owner ? 'власник, бачить усе' : p.role === 'admin' ? 'адміністратор, бачить усе' : 'працівник, бачить лише свої записи'}</small>
+                </span>
+                {p.email === me && <Icon name="check" />}
+              </button>
+            ))}
+        </div>
+      </div>
+      <button
+        class="btn ghost block"
+        onClick={async () => {
+          if (!(await ask({ title: 'Скинути демо-дані?', text: 'Усі ваші зміни в демо зникнуть, повернуться початкові приклади.', ok: 'Скинути', danger: true })))
+            return;
+          await demoApi.reset();
+          onClose();
+        }}
+      >
+        <Icon name="refresh" size={18} /> Скинути демо-дані
+      </button>
+    </>
+  );
+}
+
 function AccountSheet({ open, onClose, user, me, myName, isAdmin, dirty }) {
   const [theme, setTheme] = useState(store('norma.theme') || 'auto');
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
@@ -229,6 +282,10 @@ function AccountSheet({ open, onClose, user, me, myName, isAdmin, dirty }) {
           <span class="tag accent">{isAdmin ? 'Адміністратор' : 'Працівник'}</span>
         </div>
       </div>
+      {demo ? (
+        <DemoPanel me={me} onClose={onClose} />
+      ) : (
+        <>
       <div class="field">
         <span class="field-label">Тема</span>
         <Segmented
@@ -268,15 +325,20 @@ function AccountSheet({ open, onClose, user, me, myName, isAdmin, dirty }) {
       >
         <Icon name="logout" size={18} /> Вийти
       </button>
+        </>
+      )}
     </Sheet>
   );
 }
 
-applyTheme(store('norma.theme') || 'auto');
-matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme(store('norma.theme') || 'auto'));
+// У демо тему задає сторінка, у яку вбудовано програму
+if (!demo) {
+  applyTheme(store('norma.theme') || 'auto');
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme(store('norma.theme') || 'auto'));
+}
 
 render(<App />, document.getElementById('app'));
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+if (!demo && 'serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }

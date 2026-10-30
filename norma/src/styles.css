@@ -547,6 +547,14 @@ main {
   white-space: nowrap;
 }
 
+.demo-tag {
+  background: var(--warn-soft);
+  color: var(--warn);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+}
+
 .tag.accent {
   background: var(--accent-soft);
   color: var(--accent);

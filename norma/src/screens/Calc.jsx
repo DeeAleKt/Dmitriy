@@ -539,7 +539,16 @@ function DateBar({ date, isToday, onPrev, onNext, onPick, inputRef }) {
       <button class="icon-btn" onClick={onPrev} aria-label="Попередній день" disabled={!onPrev}>
         <Icon name="left" />
       </button>
-      <label class="date-pick" onClick={() => inputRef?.current?.showPicker?.()}>
+      <label
+        class="date-pick"
+        onClick={() => {
+          try {
+            inputRef?.current?.showPicker?.();
+          } catch {
+            /* у вбудованому вікні браузер не дає відкрити календар програмно */
+          }
+        }}
+      >
         <Icon name="calendar" size={18} />
         <span>{fmtDay(date)}</span>
         {isToday && <em>сьогодні</em>}

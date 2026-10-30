@@ -99,7 +99,10 @@ export function plural(n, [one, few, many]) {
 export const collator = new Intl.Collator('uk', { sensitivity: 'base', numeric: true });
 
 export function initials(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const parts = name
+    .split(/\s+/)
+    .map((p) => p.replace(/[^\p{L}]/gu, ''))
+    .filter(Boolean);
   return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
 }
 

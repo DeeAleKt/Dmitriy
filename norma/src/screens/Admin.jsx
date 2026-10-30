@@ -329,13 +329,15 @@ function People({ people, me }) {
   async function share() {
     const text = 'Програма для розрахунку виконання норми. Увійдіть своїм Google-акаунтом.';
     try {
-      if (navigator.share) await navigator.share({ title: 'Норма', text, url: link });
-      else {
-        await navigator.clipboard.writeText(link);
-        toast('Посилання скопійовано');
-      }
+      if (navigator.share) return await navigator.share({ title: 'Норма', text, url: link });
+    } catch (e) {
+      if (e?.name === 'AbortError') return; // користувач закрив вікно «Поділитися»
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      toast('Посилання скопійовано');
     } catch {
-      /* користувач закрив вікно «Поділитися» */
+      toast(`Скопіюйте вручну: ${link}`, 'err');
     }
   }
 

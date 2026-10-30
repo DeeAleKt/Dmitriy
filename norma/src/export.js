@@ -5,7 +5,7 @@ const r1 = (n) => Math.round(n * 10) / 10;
 const dec = (n) => ({ v: r1(n), s: STYLE.decimal });
 const date = (iso) => ({ v: excelDate(iso), s: STYLE.date });
 
-export function exportXlsx({ entries, range, nameOf }) {
+export async function exportXlsx({ entries, range, nameOf }) {
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date) || nameOf(a.email).localeCompare(nameOf(b.email), 'uk'));
 
   const days = [
@@ -59,9 +59,23 @@ export function exportXlsx({ entries, range, nameOf }) {
     { name: 'Вироби', widths: [11, 26, 32, 12, 12, 14, 12, 14], rows: items },
   ]);
   const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  return saveFile(`norma_${range.from}_${range.to}.xlsx`, blob);
+}
+
+async function saveFile(filename, blob) {
+  // Усередині claude.ai файл зберігається через вікно підтвердження сторінки
+  const downloads = window.claude?.use ? await window.claude.use('downloads').catch(() => null) : null;
+  if (downloads) {
+    try {
+      await downloads.save({ filename, data: blob });
+    } catch (e) {
+      if (e?.code !== 'declined') throw new Error('Не вдалося зберегти файл');
+    }
+    return;
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `norma_${range.from}_${range.to}.xlsx`;
+  a.download = filename;
   document.body.append(a);
   a.click();
   a.remove();
