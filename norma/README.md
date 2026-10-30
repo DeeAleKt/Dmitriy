@@ -12,6 +12,32 @@
   список доступу, зміни з часом початку, кінця і перервою.
 - Встановлюється на головний екран телефона як звичайний застосунок. Є світла й темна тема.
 
+## Офлайн-калькулятор (без сервера й конфіденційних даних)
+
+Окремий простий калькулятор на одній сторінці: `norma/standalone/calc.html` (для GitHub Pages — `docs/calc/index.html`,
+після ввімкнення Pages буде на <https://deealekt.github.io/Dmitriy/calc/>).
+
+Він **нічого не зберігає на сервері й нікуди не надсилає** — усе рахується в браузері телефона, а збережені вироби
+й останні значення лежать лише в цьому браузері (localStorage). Тому ховати тут нічого не треба: норми й назви не
+виходять із пристрою. Входу, Firebase і списку доступу немає.
+
+Що вміє:
+- зміна часом початку/кінця + перерва + простій → робочий час;
+- кілька рядків виробів: норму за зміну і кількість працівник вводить вручну;
+- кілька «популярних» виробів зі скороченою назвою й нормою можна зберегти (одним дотиком додаються); зберігаються
+  лише на пристрої;
+- **«Інші роботи»** — час, коли робили не виріб: зараховується година в годину (7 год інших робіт при 7 год роботи
+  = 100 %);
+- кнопка «Як пораховано» розписує формулу; світла й темна тема.
+
+Це окремий самодостатній HTML-файл, він не збирається esbuild. Після зміни `standalone/calc.html` перезберіть
+`docs/calc/index.html` командою нижче.
+
+```bash
+cd norma
+node -e 'const fs=require("fs");const b=fs.readFileSync("standalone/calc.html","utf8");fs.writeFileSync("../docs/calc/index.html","<!doctype html><html lang=\"uk\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>"+b+"</body></html>")'
+```
+
 ## Демо без налаштувань
 
 `npm run build` також збирає демо-версію: той самий інтерфейс без Firebase і входу, з вигаданими виробами,
