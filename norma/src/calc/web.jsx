@@ -1,5 +1,6 @@
-// Вебверсія «Норми» з акаунтами: кожен працівник входить у свій акаунт, адміністратор бачить усіх.
-// Без налаштованого Firebase (docs/config.js) працює як простий калькулятор з даними лише на телефоні.
+// Вебверсія «Норми». Вхід — за бажанням: без нього калькулятор працює з даними лише на телефоні,
+// а в акаунті дані зберігаються на сервері, доступні з будь-якого телефона, і їх бачить адміністратор.
+// Без налаштованого Firebase (docs/config.js) входу немає зовсім.
 import './styles.css';
 import { render } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
@@ -13,8 +14,16 @@ import { setScope } from './store.js';
 function Root() {
   const [user, setUser] = useState(undefined); // undefined — ще не відомо, null — не ввійшов
   const [profile, setProfile] = useState(null);
+  const [login, setLogin] = useState(false); // показати екран входу поверх калькулятора
 
-  useEffect(() => watchUser((u) => setUser(u || null)), []);
+  useEffect(
+    () =>
+      watchUser((u) => {
+        setUser(u || null);
+        if (u) setLogin(false);
+      }),
+    [],
+  );
   useEffect(() => {
     setProfile(null);
     if (!user) return;
@@ -40,7 +49,15 @@ function Root() {
   }, [user?.uid]);
 
   if (user === undefined) return <Splash />;
-  if (!user) return <AuthScreen />;
+  if (!user) {
+    setScope(null); // без акаунта — спільна памʼять телефона
+    return (
+      <>
+        <App key="guest" backend={{ provider: 'local', connect: null, signIn: () => setLogin(true) }} />
+        {login && <AuthScreen onClose={() => setLogin(false)} />}
+      </>
+    );
+  }
   if (!profile) return <Splash />;
   if (profile.blocked) return <BlockedScreen email={user.email} onSignOut={logOut} />;
   if (profile.loaded && !profile.name) return <NameScreen onSave={(n) => setName(user, n)} onSignOut={logOut} />;

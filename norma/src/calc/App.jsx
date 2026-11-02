@@ -2,7 +2,7 @@
 //   { provider: 'claude' | 'norma', connect() → { mode, cloud }, account?, signOut? }
 // claude — особистий розділ акаунта Claude (сторінка в claude.ai), norma — власний сервер з акаунтами.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { plural, today } from '../util.js';
+import { plural, store, today } from '../util.js';
 import { FATAL, fromSnapshot, mergeDays, monthBody, monthId } from './cloud.js';
 import { AppCtx } from './ctx.js';
 import { DaySheet, History, longDate } from './History.jsx';
@@ -207,24 +207,28 @@ export function App({ backend }) {
     if (backend.provider === 'norma') offerLegacy(remote);
   }
 
-  /** На телефоні лишились дані калькулятора без акаунта — запропонувати перенести їх у свій акаунт. */
+  /**
+   * На телефоні є дні, внесені без входу, — запропонувати перенести їх у щойно відкритий акаунт.
+   * Перенесені прибираються з памʼяті телефона без акаунта; якщо відмовились — лишаються там і більше не питаємо.
+   */
   async function offerLegacy(remote) {
+    const skip = `norma.v2.legacy-skip.${account?.uid}`;
     const old = legacyData();
-    if (!old) return;
+    if (!old || store(skip)) return;
     const fresh = Object.fromEntries(Object.entries(old.days).filter(([d, r]) => !r.sample && !remote.days[d]));
     const n = Object.keys(fresh).length;
-    if (!n) return clearLegacy();
+    if (!n) return;
     const ok = await ask({
       title: `Перенести ${n} ${plural(n, ['день', 'дні', 'днів'])} у ваш акаунт?`,
-      text: 'На цьому телефоні є дані калькулятора, внесені без входу в акаунт. Якщо це ваші дні — перенесіть їх, і вони зʼявляться у вашій статистиці. Якщо ні — відмовтесь, їх буде видалено з телефона.',
+      text: 'На цьому телефоні є дні, внесені без входу. Перенесіть їх — і вони будуть у вашій статистиці на будь-якому телефоні (їх бачитиме й адміністратор). Якщо відмовитесь, вони лишаться на телефоні в режимі без входу.',
       ok: 'Перенести',
+      cancel: 'Ні',
     });
-    if (ok) {
-      commitDays((d) => ({ ...fresh, ...d }));
-      commitSettings((s) => ({ ...s, products: s.products.length ? s.products : old.settings.products }));
-      toast('Дні перенесено у ваш акаунт', 'ok', 'check');
-    }
+    if (!ok) return store(skip, Date.now());
+    commitDays((d) => ({ ...fresh, ...d }));
+    commitSettings((s) => (remote.settings ? { ...s, products: s.products.length ? s.products : old.settings.products } : old.settings));
     clearLegacy();
+    toast('Дні перенесено у ваш акаунт', 'ok', 'check');
   }
 
   function applyRemote(remote) {
@@ -403,6 +407,7 @@ export function App({ backend }) {
     account,
     backend,
     signOut: backend.signOut ? signOut : null,
+    signIn: backend.signIn || null,
     openSettings: () => setSettingsOpen(true),
     openDay: (date) => setDayOpen(date),
     editDay: (date) => switchDate(date, true),

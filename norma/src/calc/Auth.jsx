@@ -1,4 +1,5 @@
 // Вхід і реєстрація: через Google або поштою з паролем. Кожен працівник — свій акаунт.
+// Вхід необовʼязковий: екран відкривається поверх калькулятора й закривається без входу (onClose).
 import { useEffect, useState } from 'preact/hooks';
 import { authMessage, redirectError, register, resetPassword, signInEmail, signInGoogle } from './fb.js';
 import { Icon, Logo, Segmented } from './ui.jsx';
@@ -16,7 +17,7 @@ const GOOGLE = (
 export const VISIBILITY =
   'Ваші дні, відсотки, вироби й простої бачите ви та адміністратор (керівник). Інші працівники їх не бачать.';
 
-export function AuthScreen() {
+export function AuthScreen({ onClose }) {
   const [mode, setMode] = useState('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -28,6 +29,14 @@ export function AuthScreen() {
 
   useEffect(() => {
     redirectError().then((e) => e && setErr(authMessage(e) || ''));
+    if (!onClose) return;
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    document.documentElement.classList.add('lock');
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.documentElement.classList.remove('lock');
+    };
   }, []);
 
   async function run(fn) {
@@ -61,12 +70,21 @@ export function AuthScreen() {
   }
 
   return (
-    <div class="auth">
+    <div class={`auth ${onClose ? 'overlay' : ''}`} role={onClose ? 'dialog' : undefined} aria-modal={onClose ? 'true' : undefined} aria-label="Вхід в акаунт">
       <div class="auth-card">
+        {onClose && (
+          <button class="icon-btn auth-close" onClick={onClose} aria-label="Закрити без входу">
+            <Icon name="x" size={20} />
+          </button>
+        )}
         <div class="auth-brand">
           <Logo size={56} />
-          <h1>Норма</h1>
-          <p>Калькулятор виконання норми — з вашою особистою статистикою</p>
+          <h1>{onClose ? 'Вхід в акаунт' : 'Норма'}</h1>
+          <p>
+            {onClose
+              ? 'Необовʼязково: з акаунтом дні зберігаються на сервері, не загубляться й доступні з будь-якого телефона'
+              : 'Калькулятор виконання норми — з вашою особистою статистикою'}
+          </p>
         </div>
 
         <button class="btn google block" disabled={busy} onClick={() => run(signInGoogle)}>
@@ -141,6 +159,11 @@ export function AuthScreen() {
           <Icon name="shield" size={16} />
           <span>{VISIBILITY}</span>
         </p>
+        {onClose && (
+          <button type="button" class="link auth-forgot" onClick={onClose}>
+            Продовжити без входу
+          </button>
+        )}
       </div>
     </div>
   );

@@ -1660,6 +1660,11 @@ input::placeholder {
   flex-direction: column;
   gap: 12px;
 }
+.foot-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .sheet-foot {
   flex: none;
   padding: 12px 20px 14px;
@@ -3557,6 +3562,24 @@ input::placeholder {
     radial-gradient(70% 45% at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
     var(--bg);
 }
+.auth.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow-y: auto;
+  align-items: flex-start;
+  padding-top: max(24px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+}
+.auth.overlay .auth-card {
+  position: relative;
+  margin: auto 0;
+}
+.auth-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
 .auth.splash .logo {
   animation: blink 1.4s ease-in-out infinite;
 }
@@ -3708,6 +3731,11 @@ input::placeholder {
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.02em;
+}
+.avatar.guest {
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--line);
 }
 .account-main {
   flex: 1;

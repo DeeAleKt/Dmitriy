@@ -17,7 +17,7 @@ const WD = [
 ];
 
 export function Settings({ onClose }) {
-  const { settings, setSettings, days, setDays, sync, wipeAll, account, signOut } = useApp();
+  const { settings, setSettings, days, setDays, sync, wipeAll, account, signOut, signIn } = useApp();
   const cloud = sync.mode === 'cloud';
   const [edit, setEdit] = useState(null); // {type:'shift'|'product', item}
   const set = (p) => setSettings((s) => ({ ...s, ...p }));
@@ -67,6 +67,33 @@ export function Settings({ onClose }) {
   return (
     <Sheet title="Налаштування" onClose={onClose} tall>
       {account && <AccountGroup account={account} signOut={signOut} />}
+      {!account && signIn && (
+        <section class="sgroup">
+          <h3>Акаунт</h3>
+          <div class="account">
+            <span class="avatar guest">
+              <Icon name="phone" size={20} />
+            </span>
+            <span class="account-main">
+              <b>Без входу</b>
+              <small>Дані лише на цьому телефоні</small>
+            </span>
+          </div>
+          <p class="hint">
+            Увійдіть (необовʼязково), щоб дні зберігались на сервері, не загубились і були доступні з будь-якого телефона. Внесені вже дні можна
+            буде перенести в акаунт. Ваші результати тоді бачитиме й адміністратор (керівник).
+          </p>
+          <button
+            class="btn primary block"
+            onClick={() => {
+              onClose();
+              signIn();
+            }}
+          >
+            Увійти або зареєструватись
+          </button>
+        </section>
+      )}
       <section class="sgroup">
         <h3>Мета і норма</h3>
         <div class="srow-static">

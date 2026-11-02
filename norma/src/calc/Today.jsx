@@ -102,7 +102,7 @@ function statusOf(res, goal, base) {
 }
 
 export function Today() {
-  const { settings, setSettings, days, draft, setDraft, sync, switchDate, openSettings } = useApp();
+  const { settings, setSettings, days, draft, setDraft, sync, switchDate, openSettings, signIn } = useApp();
   const now = useNow(30000);
   const base = settings.base;
   const goal = settings.goal;
@@ -363,7 +363,17 @@ export function Today() {
 
       <p class="privacy">
         <Icon name="shield" size={16} />
-        <span>{privacyText(sync)}</span>
+        <span>
+          {privacyText(sync)}
+          {signIn && (
+            <>
+              {' '}
+              <button class="link inline" onClick={signIn}>
+                Увійти в акаунт
+              </button>
+            </>
+          )}
+        </span>
       </p>
 
       {sheet?.type === 'how' && (
@@ -385,7 +395,7 @@ export function Today() {
       {sheet?.type === 'mgoal' && (
         <MonthGoalSheet month={draft.date.slice(0, 7)} days={days} settings={settings} setSettings={setSettings} todayISO={today()} onClose={() => setSheet(null)} />
       )}
-      {sheet?.type === 'sync' && <SyncSheet sync={sync} settings={settings} days={days} onClose={() => setSheet(null)} />}
+      {sheet?.type === 'sync' && <SyncSheet sync={sync} settings={settings} days={days} signIn={signIn} onClose={() => setSheet(null)} />}
       {sheet?.type === 'shift' && (
         <ShiftSheet draft={draft} res={res} settings={settings} setSettings={setSettings} onApply={patch} onClose={() => setSheet(null)} />
       )}
@@ -574,7 +584,7 @@ function SaveChip({ sync, dirty, invalid, blank, onClick }) {
   );
 }
 
-function SyncSheet({ sync, settings, days, onClose }) {
+function SyncSheet({ sync, settings, days, signIn, onClose }) {
   const real = Object.values(days).filter((r) => !r.sample).length;
   const at = sync.at ? new Date(sync.at) : null;
   const norma = sync.provider === 'norma';
@@ -606,9 +616,22 @@ function SyncSheet({ sync, settings, days, onClose }) {
       sub="Кнопки «Зберегти» немає — усе записується саме"
       onClose={onClose}
       footer={
-        <button class="btn soft block" onClick={() => backup(settings, days).then((r) => r === 'saved' && toast('Копію збережено')).catch((e) => toast(e.message, 'err'))}>
-          <Icon name="download" size={18} /> Резервна копія у файл
-        </button>
+        <div class="foot-stack">
+          {signIn && (
+            <button
+              class="btn primary block"
+              onClick={() => {
+                onClose();
+                signIn();
+              }}
+            >
+              Увійти в акаунт — дані на сервері
+            </button>
+          )}
+          <button class="btn soft block" onClick={() => backup(settings, days).then((r) => r === 'saved' && toast('Копію збережено')).catch((e) => toast(e.message, 'err'))}>
+            <Icon name="download" size={18} /> Резервна копія у файл
+          </button>
+        </div>
       }
     >
       <div class={`sync-hero ${sync.mode}`}>

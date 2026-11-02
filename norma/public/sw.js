@@ -1,7 +1,13 @@
-// Сервіс-воркер: кешує лише оболонку програми (код, стилі, іконки), щоб вона швидко відкривалась.
-// Дані з бази НЕ кешуються — запити до Firebase йдуть напряму.
+// Сервіс-воркер: тримає копію самого застосунку (код, стилі, іконки, налаштування), щоб калькулятор
+// відкривався й без інтернету або коли мережа не пускає на сайт. Дані працівника тут не кешуються:
+// їх зберігає сам калькулятор на телефоні й дописує на сервер, щойно звʼязок зʼявиться.
 const CACHE = 'norma-__VERSION__';
-const SHELL = ['./', './app.js?v=__VERSION__', './app.css?v=__VERSION__', './manifest.webmanifest', './icons/icon.svg'];
+const SHELL = ['./', './app.js?v=__VERSION__', './app.css?v=__VERSION__', './config.js?v=__VERSION__', './manifest.webmanifest', './icons/icon.svg'];
+
+// На хостингу Firebase кожна наша відповідь має заголовок X-Norma (див. firebase.json). Відповідь без нього —
+// чужа сторінка (напр., «сайт заблоковано» від мережі), її не показуємо і не кешуємо, а відкриваємо копію.
+const STRICT = /\.(web\.app|firebaseapp\.com)$/.test(location.hostname);
+const ours = (res) => res.ok && (!STRICT || res.headers.get('x-norma') === '1');
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -22,20 +28,27 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+const timeout = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
+
+async function handle(req) {
+  const cache = await caches.open(CACHE);
+  const cached = (await cache.match(req)) || (req.mode === 'navigate' ? await cache.match('./') : undefined);
+  try {
+    // спершу мережа (щоб оновлення приходили одразу), але якщо вона «висить» — не чекаємо довше кількох секунд
+    const res = await timeout(fetch(req), cached ? 4000 : 20000);
+    if (ours(res)) {
+      cache.put(req, res.clone());
+      return res;
+    }
+    return cached || res;
+  } catch (e) {
+    if (cached) return cached;
+    throw e;
+  }
+}
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(
-    fetch(req)
-      .then((res) => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
-        return res;
-      })
-      .catch(() =>
-        caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('./') : undefined)),
-      ),
-  );
+  e.respondWith(handle(req));
 });
