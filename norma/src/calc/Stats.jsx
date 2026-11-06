@@ -28,7 +28,6 @@ import {
 import { Hints, monthHints, MonthGoalSheet } from './Month.jsx';
 import { ApproxBanner, NormFixSheet } from './Norms.jsx';
 import { CardHead, Empty, Icon, Segmented, toast } from './ui.jsx';
-import { prideOn, say } from './vibe.js';
 
 const MODES = [
   { value: 'week', label: 'Тиждень' },
@@ -98,7 +97,7 @@ export function Stats() {
         <section class="card">
           <Empty
             icon="chart"
-            title={readOnly ? 'Ще немає жодного дня' : say(prideOn(), 'Тут буде ваша статистика', 'Тут розквітне твоя статистика 🌈')}
+            title={readOnly ? 'Ще немає жодного дня' : 'Тут буде ваша статистика'}
             action={
               !readOnly && (
                 <button class="btn soft" onClick={addSample}>
@@ -137,7 +136,7 @@ export function Stats() {
 
           {cur.n === 0 ? (
             <section class="card">
-              <Empty icon="calendar" title={say(prideOn(), 'За цей період немає збережених днів', 'За цей період — тиша. Навіть діви ходять у відпустку 🏖️')}>
+              <Empty icon="calendar" title="За цей період немає збережених днів">
                 {prev.n > 0 ? 'Перегляньте попередній період стрілкою ліворуч.' : 'Внесіть день на вкладці «Сьогодні» — він збережеться сам.'}
               </Empty>
             </section>

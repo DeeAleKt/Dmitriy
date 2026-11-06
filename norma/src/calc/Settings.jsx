@@ -255,7 +255,7 @@ export function Settings({ onClose }) {
             { value: 'dark', label: 'Темна' },
           ]}
         />
-        <Toggle label="Прайд-режим 🌈" hint="Веселка, блиск і жарти з характером. Розрахунок той самий" checked={settings.pride} onChange={(v) => set({ pride: v })} />
+        <Toggle label="Прайд-режим 🌈" hint="Веселка з прапора, неонова рамка, свій шрифт. Розрахунок той самий" checked={settings.pride} onChange={(v) => set({ pride: v })} />
         <Toggle label="Святкувати виконання норми" hint="Конфеті, коли досягаєте мети" checked={settings.celebrate} onChange={(v) => set({ celebrate: v })} />
       </section>
 

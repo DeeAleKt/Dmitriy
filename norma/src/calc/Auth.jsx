@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { authMessage, redirectError, register, resetPassword, signInEmail, signInGoogle } from './fb.js';
 import { Icon, Logo, Segmented } from './ui.jsx';
-import { prideOn, say } from './vibe.js';
 
 const GOOGLE = (
   <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
@@ -84,7 +83,7 @@ export function AuthScreen({ onClose }) {
           <p>
             {onClose
               ? 'Необовʼязково: з акаунтом дні зберігаються на сервері, не загубляться й доступні з будь-якого телефона'
-              : say(prideOn(), 'Калькулятор виконання норми — з вашою особистою статистикою', 'Калькулятор норми для тих, хто ніколи не був «нормальним» 🌈')}
+              : 'Калькулятор виконання норми — з вашою особистою статистикою'}
           </p>
         </div>
 

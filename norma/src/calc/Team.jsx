@@ -11,7 +11,6 @@ import { monthName } from './Month.jsx';
 import { Stats } from './Stats.jsx';
 import { FILTERS, sortRows, teamRow, teamSummary } from './team.js';
 import { ask, Empty, Icon, Segmented, Sheet, toast } from './ui.jsx';
-import { prideOn, say } from './vibe.js';
 
 const prevMonthOf = (m) => addDays(`${m}-01`, -1).slice(0, 7);
 const nextMonthOf = (m) => addDays(`${m}-28`, 7).slice(0, 7);
@@ -171,7 +170,7 @@ export function Team() {
               <WorkerRow r={r} isCurrent={isCurrent} me={r.uid === account.uid} onOpen={() => setOpen(r.uid)} />
             ))}
             {!shown.length && (
-              <Empty icon="users" title={rows.length ? 'Нікого за цим фільтром' : say(prideOn(), 'Ще ніхто не зареєструвався', 'Ще ніхто не прийшов — вечірка тільки починається 🪩')}>
+              <Empty icon="users" title={rows.length ? 'Нікого за цим фільтром' : 'Ще ніхто не зареєструвався'}>
                 {rows.length ? '' : 'Надішліть працівникам посилання на калькулятор — щойно хтось увійде, він зʼявиться тут.'}
               </Empty>
             )}

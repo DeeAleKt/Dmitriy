@@ -1,20 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { computeDay, level, normalizeSettings } from '../src/calc/model.js';
-import { moodOf, QUIPS, quip, say } from '../src/calc/vibe.js';
+import { moodOf, QUIPS, quip } from '../src/calc/vibe.js';
 
 const day = (qty, norm = 35) => computeDay({ start: '06:30', end: '19:30', brk: 75, products: [{ norm, qty }] }, 420);
 
-test('жарти: стійкі для тих самих умов, різні з часом, для кожного стану є', () => {
-  for (const [kind, list] of Object.entries(QUIPS)) {
-    assert.ok(list.length >= 3, kind);
-    assert.ok(list.every((x) => typeof x === 'string' && x.length > 10 && x.length < 90), kind);
-    assert.ok(list.includes(quip(kind, 'x')), kind);
-  }
-  assert.equal(quip('good', '2026-11-06|1'), quip('good', '2026-11-06|1'));
-  const seen = new Set(Array.from({ length: 30 }, (_, i) => quip('good', `2026-11-06|${i}`)));
-  assert.ok(seen.size >= 3); // з часом жарти змінюються
-  assert.ok(QUIPS.empty.includes(quip('нема-такого', 'x'))); // невідомий стан — як порожній
+test('жарти: без вписаних — нічого не показується; вписані — стійкі для тих самих умов', () => {
+  for (const kind of Object.keys(QUIPS)) assert.equal(quip(kind, 'x'), null, kind);
+  assert.equal(quip('нема-такого', 'x'), null);
+  const mine = { good: ['А', 'Б', 'В', 'Г'] };
+  assert.equal(quip('good', '2026-11-06|1', mine), quip('good', '2026-11-06|1', mine));
+  const seen = new Set(Array.from({ length: 30 }, (_, i) => quip('good', `2026-11-06|${i}`, mine)));
+  assert.ok(seen.size >= 3); // з часом змінюються
+  assert.equal(quip('bad', 'x', mine), null); // для інших станів — нічого
 });
 
 test('настрій дня — з тих самих даних, що й відсоток', () => {
@@ -27,14 +25,12 @@ test('настрій дня — з тих самих даних, що й від�
   assert.equal(moodOf(day(60), lv(day(60))), 'good'); // 102 %
   assert.equal(moodOf(day(70), lv(day(70))), 'great'); // 119 %
   assert.equal(moodOf(day(60), 'good', { after: true }), 'after');
-  assert.equal(moodOf(day(40), 'bad', { after: true }), 'bad'); // зміна скінчилась, а норми немає — не «уклін»
+  assert.equal(moodOf(day(40), 'bad', { after: true }), 'bad'); // зміна скінчилась, а норми немає
   assert.equal(moodOf(day(400), 'great', { odd: true }), 'odd');
 });
 
-test('прайд-режим: увімкнений за замовчуванням, вимикається, а звичайні тексти лишаються', () => {
+test('прайд-режим: увімкнений за замовчуванням і вимикається', () => {
   assert.equal(normalizeSettings(null).pride, true);
   assert.equal(normalizeSettings({ pride: false }).pride, false);
   assert.equal(normalizeSettings({ pride: 'так' }).pride, true);
-  assert.equal(say(true, 'Норму виконано', 'Слей!'), 'Слей!');
-  assert.equal(say(false, 'Норму виконано', 'Слей!'), 'Норму виконано');
 });

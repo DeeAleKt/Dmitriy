@@ -4,7 +4,6 @@ import { useApp } from './ctx.js';
 import { computeDay, isApprox, level, oddDay, pctText, summarize } from './model.js';
 import { Breakdown, copyText, summaryText } from './Today.jsx';
 import { ask, Empty, Icon, Sheet, toast } from './ui.jsx';
-import { prideOn, say } from './vibe.js';
 
 const WD = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 const MONTHS = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
@@ -51,7 +50,7 @@ export function History() {
         <section class="card">
           <Empty
             icon="history"
-            title={say(prideOn(), 'Поки що жодного дня', 'Тут порожньо, як у шафі після камінг-ауту 🚪')}
+            title="Поки що жодного дня"
             action={
               !readOnly && (
                 <button class="btn soft" onClick={() => go('today')}>
