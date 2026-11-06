@@ -50,8 +50,8 @@ export function summaryText(day, res) {
     `${WEEKDAYS[d.getDay()].charAt(0).toUpperCase() + WEEKDAYS[d.getDay()].slice(1)}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()]} · ${day.shiftName || 'зміна'}: вхід ${fmtTime(day.start)}, вихід ${fmtTime(day.end)}`,
   ];
   for (const l of res.active) lines.push(`${l.name || 'Виріб'}: ${fmt(l.qty)} шт (норма ${l.approx ? '≈' : ''}${fmt(l.norm)} за зміну${l.approx ? ', приблизна' : ''})`);
-  for (const x of day.downtime || []) lines.push(`Простій: ${x.reason} — ${fmtMin(num(x.min))}`);
-  for (const x of day.others || []) lines.push(`Інші роботи: ${x.kind} — ${fmtMin(num(x.min))}`);
+  for (const x of day.downtime || []) lines.push(`${withWhy('Простій', x.reason)} — ${fmtMin(num(x.min))}`);
+  for (const x of day.others || []) lines.push(`${withWhy('Інша робота', x.kind)} — ${fmtMin(num(x.min))}`);
   lines.push(`Виконання норми: ${res.active.some((l) => l.approx && l.qty > 0) ? '≈' : ''}${fmt(res.pct, 1)}%`);
   return lines.join('\n');
 }
@@ -840,13 +840,20 @@ function ProductItem({ p, idx, line, res, base, onChange, onRemove, onPick, onFi
 
 // ---------- Простій та інші роботи ----------
 
+/** Причина необовʼязкова: без неї запис зберігається як «Інше», а в рядку — просто «Простій» чи «Інша робота». */
+const timeName = (down, item) => {
+  const name = down ? item.reason : item.kind;
+  return !name || name === 'Інше' ? (down ? 'Простій' : 'Інша робота') : name;
+};
+const withWhy = (label, why) => (why && why !== 'Інше' ? `${label}: ${why}` : label);
+
 function TimeRow({ kind, item, onEdit, onRemove }) {
   const down = kind === 'down';
   return (
     <div class={`trow ${kind}`}>
       <button class="trow-main" onClick={onEdit}>
         <span class={`tdot ${kind}`} />
-        <span class="tname">{down ? item.reason : item.kind}</span>
+        <span class="tname">{timeName(down, item)}</span>
         <span class={`tmin ${kind}`}>
           {down ? '−' : '+'}
           {fmtMin(item.min)}
@@ -862,34 +869,33 @@ function TimeRow({ kind, item, onEdit, onRemove }) {
 function TimeSheet({ kind, item, draft, base, settings, setSettings, onSave, onDelete, onClose }) {
   const down = kind === 'down';
   const field = down ? 'downReasons' : 'otherKinds';
-  const list = settings[field];
+  const list = settings[field].filter((x) => x !== 'Інше');
   const first = item ? (down ? item.reason : item.kind) : '';
-  const [name, setName] = useState(first && list.includes(first) ? first : '');
-  const [customOn, setCustomOn] = useState(Boolean(first && !list.includes(first)));
-  const [custom, setCustom] = useState(first && !list.includes(first) ? first : '');
+  const own = Boolean(first && first !== 'Інше' && !list.includes(first));
+  const [name, setName] = useState(list.includes(first) ? first : '');
+  const [customOn, setCustomOn] = useState(own);
+  const [custom, setCustom] = useState(own ? first : '');
   const [min, setMin] = useState(item ? item.min : down ? 15 : 60);
   const options = down ? DOWN_MINUTES : OTHER_MINUTES;
   const chosen = (customOn ? custom : name).trim();
-  const ok = chosen && min > 0;
+  const ok = min > 0;
 
   // як зміниться день із цим записом
   const without = { ...draft, downtime: draft.downtime.filter((x) => x.key !== item?.key), others: draft.others.filter((x) => x.key !== item?.key) };
   const before = computeDay(without, base);
   const rest = down ? 0 : Math.max(0, before.avail - before.otherMin);
-  const withIt = down
-    ? { ...without, downtime: [...without.downtime, { reason: chosen, min }] }
-    : { ...without, others: [...without.others, { kind: chosen, min }] };
+  const withIt = down ? { ...without, downtime: [...without.downtime, { min }] } : { ...without, others: [...without.others, { min }] };
   const after = computeDay(withIt, base);
 
   function submit() {
     if (!ok) return;
-    if (customOn && !list.includes(chosen)) {
+    if (customOn && chosen && !settings[field].includes(chosen)) {
       setSettings((s) => {
         const l = s[field].filter((x) => x !== 'Інше');
         return { ...s, [field]: [...l, chosen, ...(s[field].includes('Інше') ? ['Інше'] : [])] };
       });
     }
-    onSave({ key: item?.key || newKey(), [down ? 'reason' : 'kind']: chosen, min: Math.round(min) });
+    onSave({ key: item?.key || newKey(), [down ? 'reason' : 'kind']: chosen || 'Інше', min: Math.round(min) });
   }
 
   const h = Math.floor(min / 60);
@@ -898,10 +904,9 @@ function TimeSheet({ kind, item, draft, base, settings, setSettings, onSave, onD
 
   return (
     <Sheet
-      title={item ? (down ? 'Простій' : 'Інші роботи') : down ? 'Додати простій' : 'Додати інші роботи'}
-      sub={down ? 'Час, коли не було змоги працювати' : 'Зараховується година в годину'}
+      title={down ? 'Простій' : 'Інша робота'}
+      sub={down ? 'Зменшує робочий час і норму на день' : 'Зараховується година в годину'}
       onClose={onClose}
-      tall
       footer={
         <>
           {ok && after.valid && (
@@ -919,7 +924,7 @@ function TimeSheet({ kind, item, draft, base, settings, setSettings, onSave, onD
                   </>
                 ) : (
                   <>
-                    +{fmtMin(min)} нормо-часу → виконання <b>{fmt(after.pct, 1)}%</b>
+                    Виконання стане <b>{fmt(after.pct, 1)}%</b>
                   </>
                 )}
               </span>
@@ -933,27 +938,57 @@ function TimeSheet({ kind, item, draft, base, settings, setSettings, onSave, onD
               </button>
             )}
             <button class="btn primary grow" disabled={!ok} onClick={submit}>
-              {!chosen ? (down ? 'Оберіть причину' : 'Оберіть, що робили') : `${item ? 'Зберегти' : 'Додати'} · ${minutesLabel(min)}`}
+              {ok ? `${item ? 'Зберегти' : 'Додати'} · ${minutesLabel(min)}` : 'Вкажіть час'}
             </button>
           </div>
         </>
       }
     >
-      <div class="sec-label">{down ? 'Причина' : 'Що робили'}</div>
-      <div class="choices">
-        {list.map((x) => (
-          <button
-            class={`choice ${!customOn && name === x ? 'on' : ''}`}
-            onClick={() => {
-              setName(x);
-              setCustomOn(false);
-            }}
-          >
-            {x}
+      <div class="minutes tight">
+        {options.map((x) => (
+          <button class={`mchip ${min === x ? 'on' : ''}`} onClick={() => setMin(x)}>
+            {minutesLabel(x)}
           </button>
         ))}
-        <button class={`choice add ${customOn ? 'on' : ''}`} onClick={() => setCustomOn(true)}>
-          <Icon name="plus" size={16} /> Своє
+        {!down && rest > 0 && !options.includes(rest) && (
+          <button class={`mchip wide ${min === rest ? 'on' : ''}`} onClick={() => setMin(rest)}>
+            Уся решта зміни · {fmtMin(rest)}
+          </button>
+        )}
+      </div>
+      <div class="hm tight">
+        <span>Точно:</span>
+        <label class="hm-box">
+          <input inputMode="numeric" value={h ? String(h) : ''} placeholder="0" aria-label="Годин" onFocus={(e) => e.currentTarget.select()} onInput={(e) => setHM(e.currentTarget.value.replace(/\D/g, ''), m)} />
+          <em>год</em>
+        </label>
+        <label class="hm-box">
+          <input inputMode="numeric" value={m ? String(m) : ''} placeholder="0" aria-label="Хвилин" onFocus={(e) => e.currentTarget.select()} onInput={(e) => setHM(h, e.currentTarget.value.replace(/\D/g, ''))} />
+          <em>хв</em>
+        </label>
+      </div>
+
+      <div class="sec-label">
+        {down ? 'Причина' : 'Що робили'} <small>· за бажанням</small>
+      </div>
+      <div class="reasons">
+        {list.map((x) => {
+          const on = !customOn && name === x;
+          return (
+            <button
+              class={`rchip ${on ? 'on' : ''}`}
+              aria-pressed={on}
+              onClick={() => {
+                setName(on ? '' : x);
+                setCustomOn(false);
+              }}
+            >
+              {x}
+            </button>
+          );
+        })}
+        <button class={`rchip add ${customOn ? 'on' : ''}`} aria-pressed={customOn} onClick={() => setCustomOn(!customOn)}>
+          <Icon name="plus" size={15} /> Своє
         </button>
       </div>
       {customOn && (
@@ -966,32 +1001,6 @@ function TimeSheet({ kind, item, draft, base, settings, setSettings, onSave, onD
           onInput={(e) => setCustom(e.currentTarget.value)}
         />
       )}
-
-      <div class="sec-label">Скільки часу</div>
-      <div class="minutes">
-        {options.map((x) => (
-          <button class={`mchip ${min === x ? 'on' : ''}`} onClick={() => setMin(x)}>
-            {minutesLabel(x)}
-          </button>
-        ))}
-        {!down && rest > 0 && !options.includes(rest) && (
-          <button class={`mchip wide ${min === rest ? 'on' : ''}`} onClick={() => setMin(rest)}>
-            Уся решта зміни · {fmtMin(rest)}
-          </button>
-        )}
-      </div>
-      <div class="hm">
-        <span>Точно:</span>
-        <label class="hm-box">
-          <input inputMode="numeric" value={h ? String(h) : ''} placeholder="0" aria-label="Годин" onFocus={(e) => e.currentTarget.select()} onInput={(e) => setHM(e.currentTarget.value.replace(/\D/g, ''), m)} />
-          <em>год</em>
-        </label>
-        <label class="hm-box">
-          <input inputMode="numeric" value={m ? String(m) : ''} placeholder="0" aria-label="Хвилин" onFocus={(e) => e.currentTarget.select()} onInput={(e) => setHM(h, e.currentTarget.value.replace(/\D/g, ''))} />
-          <em>хв</em>
-        </label>
-      </div>
-
     </Sheet>
   );
 }
@@ -1239,7 +1248,7 @@ export function Breakdown({ day, res, base }) {
         </div>
         {(day.downtime || []).map((d) => (
           <div class="bd-row">
-            <span>− простій: {d.reason}</span>
+            <span>− {withWhy('простій', d.reason)}</span>
             <b>{fmtMin(num(d.min))}</b>
           </div>
         ))}
@@ -1283,7 +1292,7 @@ export function Breakdown({ day, res, base }) {
           </div>
           {(day.others || []).map((o) => (
             <div class="bd-row">
-              <span>{o.kind}</span>
+              <span>{timeName(false, o)}</span>
               <b>{fmt(num(o.min), 0)} нормо-хв</b>
             </div>
           ))}

@@ -1728,45 +1728,6 @@ input::placeholder {
   text-align: left;
   min-height: 1.2em;
 }
-.choices {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.choice {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 48px;
-  min-width: 0;
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: var(--surface-2);
-  border: 1.5px solid var(--line);
-  font-weight: 650;
-  font-size: 15px;
-  text-align: left;
-  line-height: 1.25;
-  transition: background 0.15s, color 0.15s, transform 0.1s;
-}
-.choice:active {
-  transform: scale(0.97);
-}
-.choice.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-.choice.add {
-  border-style: dashed;
-  color: var(--accent);
-  background: transparent;
-}
-.choice.add.on {
-  border-style: solid;
-  background: var(--accent);
-  color: var(--accent-ink);
-}
 .minutes {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1829,6 +1790,70 @@ input::placeholder {
 .hm-box em {
   font-style: normal;
   font-size: 13px;
+}
+
+/* вікно простою / інших робіт: спершу час, причина — одним рядком і за бажанням */
+.minutes.tight {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.minutes.tight .mchip {
+  height: 42px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+.hm.tight .hm-box {
+  height: 42px;
+}
+.sec-label small {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--faint);
+}
+.reasons {
+  display: flex;
+  gap: 6px;
+  margin: -4px -20px 0;
+  padding: 0 20px 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 28px), transparent);
+}
+.reasons::-webkit-scrollbar {
+  display: none;
+}
+.rchip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.rchip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.rchip.add {
+  border-style: dashed;
+  background: transparent;
+  color: var(--accent);
+}
+.rchip.add.on {
+  border-style: solid;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 .effect {
   display: flex;
