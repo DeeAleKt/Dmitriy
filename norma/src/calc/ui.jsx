@@ -239,7 +239,8 @@ function useHold(action) {
 export const cleanNum = (s) => String(s).replace(/[^\d.,]/g, '').replace(/([.,].*)[.,]/g, '$1');
 const toNum = (s) => parseFloat(String(s).replace(',', '.')) || 0;
 
-export function Stepper({ value, onChange, label, step = 1 }) {
+/** placeholder — сіра підказка в порожньому полі (наприклад, скільки штук треба на 100 %). */
+export function Stepper({ value, onChange, label, step = 1, placeholder = '0' }) {
   const ref = useRef(value);
   ref.current = value;
   const bump = (d) => {
@@ -263,7 +264,7 @@ export function Stepper({ value, onChange, label, step = 1 }) {
         inputMode="decimal"
         aria-label={label}
         value={value}
-        placeholder="0"
+        placeholder={placeholder}
         onFocus={(e) => e.currentTarget.select()}
         onInput={(e) => onChange(cleanNum(e.currentTarget.value))}
       />

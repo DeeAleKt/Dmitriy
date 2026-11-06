@@ -820,7 +820,12 @@ function ProductItem({ p, idx, line, res, base, goal, onChange, onRemove, onPick
         </label>
         <div class="mini">
           <span class="mini-label">Зроблено</span>
-          <Stepper value={p.qty} onChange={(v) => onChange({ qty: v })} label="Зроблено, шт" />
+          <Stepper
+            value={p.qty}
+            onChange={(v) => onChange({ qty: v })}
+            label={target != null ? `Зроблено, шт (на ${goal}% треба ${target})` : 'Зроблено, шт'}
+            placeholder={target != null ? String(target) : '0'}
+          />
         </div>
       </div>
       {!norm && !p.approx && (
