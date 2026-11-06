@@ -48,6 +48,7 @@ export const DEFAULT_SETTINGS = {
   monthGoal: null, // загальна мета на місяць (null — як особиста мета)
   monthGoals: {}, // окрема мета на конкретний місяць: { 'РРРР-ММ': % }
   workdays: WORKDAYS,
+  cycle: null, // змінний графік замість днів тижня: { on, off, from } — 1/1, 2/2…; from — перший день робочого блоку
   shifts: DEFAULT_SHIFTS,
   products: [],
   downReasons: DEFAULT_DOWN,
@@ -81,6 +82,9 @@ export function normalizeSettings(s) {
   for (const [m, v] of Object.entries(s?.monthGoals && typeof s.monthGoals === 'object' ? s.monthGoals : {}))
     if (/^\d{4}-\d{2}$/.test(m) && pctOf(v) != null) monthGoals[m] = pctOf(v);
   const workdays = Array.isArray(s?.workdays) ? [...new Set(s.workdays.map(Number).filter((x) => x >= 0 && x <= 6))].sort() : d.workdays;
+  const span = (v) => Number.isInteger(v) && v >= 1 && v <= 7;
+  const c = s?.cycle;
+  const cycle = c && span(c.on) && span(c.off) && /^\d{4}-\d{2}-\d{2}$/.test(c.from) ? { on: c.on, off: c.off, from: c.from } : null;
   const oldShifts = !(parseNum(s?.v) >= SETTINGS_V);
   return {
     v: SETTINGS_V,
@@ -89,6 +93,7 @@ export function normalizeSettings(s) {
     monthGoal: pctOf(s?.monthGoal),
     monthGoals,
     workdays: workdays.length ? workdays : d.workdays,
+    cycle,
     shifts: Array.isArray(s?.shifts) && !oldShifts
       ? s.shifts
           .filter((x) => x && shiftLength(x.start, x.end) > 0)
@@ -489,10 +494,26 @@ export function openDayOf(days, todayISO, now = new Date()) {
 /** Мета на місяць: окрема для цього місяця → загальна місячна → особиста. */
 export const monthGoalOf = (settings, month) => settings.monthGoals?.[month] ?? settings.monthGoal ?? settings.goal;
 
+/** Чи робочий день за графіком: змінний (1/1, 2/2… від першого дня робочого блоку) або дні тижня. */
+export function workdayTest(settings) {
+  const c = settings?.cycle;
+  if (!c) {
+    const wd = settings?.workdays || WORKDAYS;
+    return (iso) => wd.includes(fromISO(iso).getDay());
+  }
+  const len = c.on + c.off;
+  const t0 = fromISO(c.from);
+  return (iso) => {
+    const n = Math.round((fromISO(iso) - t0) / 864e5); // round — на випадок переходу на літній/зимовий час
+    return ((n % len) + len) % len < c.on;
+  };
+}
+
 /**
  * Календарний місяць (з 1-го числа, а не «останні 30 днів»): середнє, зважене за робочим часом,
  * скільки нормо-хвилин бракує до мети і скільки треба в середньому в решту робочих днів.
  * openDate — сьогоднішня зміна, що ще триває: її неповний результат не рахується, а сам день — у решті.
+ * workdays — дні тижня ([1..5]) або перевірка дати з workdayTest(settings).
  */
 export function monthStatus(days, month, todayISO, goal, workdays = WORKDAYS, openDate = null) {
   const { from, to } = monthRange(`${month}-01`);
@@ -500,9 +521,10 @@ export function monthStatus(days, month, todayISO, goal, workdays = WORKDAYS, op
     recordsIn(days, from, to).filter((r) => r.date !== openDate),
     goal,
   );
+  const isWork = typeof workdays === 'function' ? workdays : (d) => workdays.includes(fromISO(d).getDay());
   let rest = 0;
   for (let d = todayISO > from ? todayISO : from; d <= to; d = addDays(d, 1))
-    if ((workdays.includes(fromISO(d).getDay()) && !days[d]) || d === openDate) rest++; // сьогоднішня зміна — завжди в решті
+    if ((isWork(d) && !days[d]) || d === openDate) rest++; // сьогоднішня зміна — завжди в решті
   const avgAvail = s.n ? s.avail / s.n : null;
   let needPct = null;
   if (rest > 0) needPct = s.n ? (((goal / 100) * (s.avail + rest * avgAvail) - s.earned) / (rest * avgAvail)) * 100 : goal;

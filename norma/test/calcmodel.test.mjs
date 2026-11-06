@@ -226,7 +226,7 @@ test('підписи хвилин', () => {
 });
 
 // ---------- тенденції та висновки ----------
-import { compareDay, monthGoalOf, monthPlan, monthStatus, movingAvg, openDayOf, rankInMonth, trendOf, weeksOf, withDay } from '../src/calc/model.js';
+import { compareDay, monthGoalOf, monthPlan, monthStatus, movingAvg, openDayOf, rankInMonth, trendOf, weeksOf, withDay, workdayTest } from '../src/calc/model.js';
 
 const rec = (date, qty, patch = {}) => ({ ...day({ date, products: [{ name: 'А', norm: 35, qty }] }), base: 420, ...patch });
 
@@ -370,6 +370,24 @@ test('стан місяця: календарний місяць, нестача
   const fresh = monthStatus(days, '2026-11', '2026-11-02', 105);
   assert.equal(fresh.n, 0);
   assert.equal(fresh.needPct, 105);
+});
+
+test('змінний графік 1/1 і 2/2: робочі дні від першого дня блоку, у будь-який бік', () => {
+  const week = ['2026-11-06', '2026-11-07', '2026-11-08', '2026-11-09', '2026-11-10', '2026-11-11'];
+  const one = workdayTest(normalizeSettings({ cycle: { on: 1, off: 1, from: '2026-11-06' } }));
+  assert.deepEqual(week.map(one), [true, false, true, false, true, false]);
+  assert.equal(one('2026-11-05'), false); // і до дати відліку
+  const two = workdayTest(normalizeSettings({ cycle: { on: 2, off: 2, from: '2026-11-07' } }));
+  assert.deepEqual(week.map(two), [false, true, true, false, false, true]);
+  // по той бік переходу на зимовий час (25.10): 22–23.10 робочі, 24–25.10 вихідні
+  assert.deepEqual(['2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'].map(two), [true, true, false, false]);
+  // без графіка — дні тижня; зіпсований графік відкидається
+  assert.equal(workdayTest(normalizeSettings({}))('2026-11-07'), false); // субота
+  assert.equal(normalizeSettings({ cycle: { on: 0, off: 1, from: '2026-11-06' } }).cycle, null);
+  // решта листопада з 24-го при 1/1 від 6.11: 24 (уже записаний — не рахується), 26, 28, 30
+  const days = { '2026-11-24': rec('2026-11-24', 35) };
+  assert.equal(monthStatus(days, '2026-11', '2026-11-24', 100, one).rest, 3);
+  assert.equal(monthStatus({}, '2026-11', '2026-11-24', 100, one).rest, 4);
 });
 
 test('новий день: зміна з попереднього, а вхід і вихід — за графіком', async () => {

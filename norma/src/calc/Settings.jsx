@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks';
-import { fmt, fmtMin, fmtTime, plural } from '../util.js';
+import { addDays, fmt, fmtMin, fmtTime, fromISO, plural } from '../util.js';
 import { useApp } from './ctx.js';
 import { backup, exportExcel, readBackup } from './files.js';
-import { applyNorm, DEFAULT_DOWN, DEFAULT_OTHER, makeSample, newKey, num, shiftLength } from './model.js';
+import { applyNorm, DEFAULT_DOWN, DEFAULT_OTHER, makeSample, newKey, num, shiftLength, workdayTest } from './model.js';
 import { ask, cleanNum, Icon, Segmented, Sheet, toast, Toggle } from './ui.jsx';
 import { today } from '../util.js';
 
@@ -15,6 +15,35 @@ const WD = [
   [6, 'Сб'],
   [0, 'Нд'],
 ];
+const WD_LABEL = Object.fromEntries(WD);
+
+/** Найближчий тиждень за змінним графіком: працівник бачить свої робочі дні й зсуває, поки не збіжеться. */
+function CycleDays({ cycle, onShift }) {
+  const t = today();
+  const isWork = workdayTest({ cycle });
+  return (
+    <>
+      <div class="wdays">
+        {Array.from({ length: 7 }, (_, i) => {
+          const d = addDays(t, i);
+          const on = isWork(d);
+          return (
+            <span class={`wday cday ${on ? 'on' : ''}`} aria-label={`${d}: ${on ? 'робочий' : 'вихідний'}`}>
+              <small>{i ? WD_LABEL[fromISO(d).getDay()] : 'сьог.'}</small>
+              {fromISO(d).getDate()}
+            </span>
+          );
+        })}
+      </div>
+      <p class="hint">
+        Підсвічено робочі дні. Не збігається з вашими?{' '}
+        <button class="link inline" onClick={onShift}>
+          Зсунути на день
+        </button>
+      </p>
+    </>
+  );
+}
 
 export function Settings({ onClose }) {
   const { settings, setSettings, days, setDays, sync, wipeAll, account, signOut, signIn } = useApp();
@@ -112,26 +141,40 @@ export function Settings({ onClose }) {
         </div>
         <div class="srow-col">
           <div>
-            <b>Робочі дні</b>
-            <span class="hint">Щоб рахувати, скільки днів лишилось до кінця місяця</span>
+            <b>Графік роботи</b>
+            <span class="hint">Щоб рахувати, скільки робочих днів лишилось до кінця місяця</span>
           </div>
-          <div class="wdays">
-            {WD.map(([d, l]) => {
-              const on = settings.workdays.includes(d);
-              return (
-                <button
-                  class={`wday ${on ? 'on' : ''}`}
-                  aria-pressed={on}
-                  onClick={() => {
-                    const next = on ? settings.workdays.filter((x) => x !== d) : [...settings.workdays, d].sort();
-                    if (next.length) set({ workdays: next });
-                  }}
-                >
-                  {l}
-                </button>
-              );
-            })}
-          </div>
+          <Segmented
+            small
+            value={settings.cycle ? `${settings.cycle.on}/${settings.cycle.off}` : 'week'}
+            options={[
+              { value: 'week', label: 'Дні тижня' },
+              { value: '1/1', label: '1 через 1' },
+              { value: '2/2', label: '2 через 2' },
+            ]}
+            onChange={(v) => set({ cycle: v === 'week' ? null : { on: Number(v[0]), off: Number(v[2]), from: settings.cycle?.from || today() } })}
+          />
+          {settings.cycle ? (
+            <CycleDays cycle={settings.cycle} onShift={() => set({ cycle: { ...settings.cycle, from: addDays(settings.cycle.from, 1) } })} />
+          ) : (
+            <div class="wdays">
+              {WD.map(([d, l]) => {
+                const on = settings.workdays.includes(d);
+                return (
+                  <button
+                    class={`wday ${on ? 'on' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => {
+                      const next = on ? settings.workdays.filter((x) => x !== d) : [...settings.workdays, d].sort();
+                      if (next.length) set({ workdays: next });
+                    }}
+                  >
+                    {l}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div class="srow-static">
           <div>

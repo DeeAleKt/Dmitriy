@@ -3148,6 +3148,21 @@ input::placeholder {
   border-color: var(--accent);
   color: var(--accent-ink);
 }
+.wday.cday {
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.wday.cday small {
+  font-size: 10.5px;
+  font-weight: 700;
+  opacity: 0.75;
+}
 .srow-static > div:first-child {
   min-width: 0;
 }

@@ -23,6 +23,7 @@ import {
   trendOf,
   weeksOf,
   WEEKDAYS_SHORT,
+  workdayTest,
 } from './model.js';
 import { Hints, monthHints, MonthGoalSheet } from './Month.jsx';
 import { ApproxBanner, NormFixSheet } from './Norms.jsx';
@@ -58,7 +59,7 @@ export function Stats() {
   // мета календарного місяця: середнє з 1-го числа, скільки бракує, скільки треба в решту днів
   const month = period.from.slice(0, 7);
   const mstat = useMemo(
-    () => (mode === 'month' && month <= t.slice(0, 7) ? monthStatus(days, month, t, monthGoalOf(settings, month), settings.workdays, isCurrent ? open : null) : null),
+    () => (mode === 'month' && month <= t.slice(0, 7) ? monthStatus(days, month, t, monthGoalOf(settings, month), workdayTest(settings), isCurrent ? open : null) : null),
     [mode, month, days, settings, t, isCurrent, open],
   );
   // ковзне середнє з запасом днів до початку періоду, щоб лінія не «стрибала» на початку

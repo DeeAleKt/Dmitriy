@@ -1,7 +1,7 @@
 // Мета на календарний місяць: картка з підказками і вікно, де мету задають.
 import { useMemo, useState } from 'preact/hooks';
 import { fmt, fmtMin, plural } from '../util.js';
-import { level, monthGoalOf, monthStatus, num, openDayOf, pctText, withDay } from './model.js';
+import { level, monthGoalOf, monthStatus, num, openDayOf, pctText, withDay, workdayTest } from './model.js';
 import { cleanNum, Icon, Sheet, Toggle } from './ui.jsx';
 
 export const MONTHS_NOM = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
@@ -18,7 +18,7 @@ export function useMonth(days, settings, month, todayISO) {
   return useMemo(() => {
     const goal = monthGoalOf(settings, month);
     const open = month === todayISO.slice(0, 7) ? openDayOf(days, todayISO) : null;
-    return { ...monthStatus(days, month, todayISO, goal, settings.workdays, open), open };
+    return { ...monthStatus(days, month, todayISO, goal, workdayTest(settings), open), open };
   }, [days, settings, month, todayISO]);
 }
 
@@ -170,8 +170,8 @@ export function MonthGoalSheet({ month, days, settings, setSettings, todayISO, o
   const preview = useMemo(() => {
     if (!ok) return null;
     const open = month === todayISO.slice(0, 7) ? openDayOf(days, todayISO) : null;
-    return monthStatus(days, month, todayISO, v, settings.workdays, open);
-  }, [ok, v, days, month, todayISO, settings.workdays]);
+    return monthStatus(days, month, todayISO, v, workdayTest(settings), open);
+  }, [ok, v, days, month, todayISO, settings.workdays, settings.cycle]);
   function save() {
     if (!ok) return;
     const g = Math.round(v * 10) / 10;
