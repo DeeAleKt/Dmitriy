@@ -3,7 +3,6 @@ import { addDays, fmt, fmtHM, fmtMin, fmtTime, fromISO, pad, plural, store, toda
 import { useApp, useNow } from './ctx.js';
 import { backup, BACKUP_KEY } from './files.js';
 import { buzz, confetti } from './fx.js';
-import { Gauge } from './Gauge.jsx';
 import { MonthCard, MonthGoalSheet } from './Month.jsx';
 import { NormFixSheet } from './Norms.jsx';
 import {
@@ -30,7 +29,7 @@ import {
   toGoal,
   toRecord,
 } from './model.js';
-import { ask, CardHead, cleanNum, Icon, Sheet, Stepper, toast, Toggle } from './ui.jsx';
+import { ask, CardHead, cleanNum, Icon, Sheet, Stepper, toast, Toggle, useTween } from './ui.jsx';
 
 const WEEKDAYS = ['неділя', 'понеділок', 'вівторок', 'середа', 'четвер', 'пʼятниця', 'субота'];
 const MONTHS_GEN = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
@@ -79,15 +78,13 @@ export async function copyText(text) {
   }
 }
 
-const TIP_KEY = 'norma.v2.tip-done';
-
-/** Що показати під шкалою. */
+/** Головний рядок під відсотком: що зробити далі або скільки ще лишилось. */
 function statusOf(res, goal, base) {
   if (res.error === 'shift') return { icon: 'clock', text: 'Вкажіть час зміни' };
   if (res.error === 'break') return { icon: 'info', text: 'Перерва довша за зміну' };
-  if (res.error === 'downtime') return { icon: 'pause', text: 'Простій забрав увесь робочий час' };
-  if (!res.active.length && !res.otherMin) return { icon: 'plus', text: 'Додайте виріб або інші роботи' };
-  if (!res.hasInput) return { icon: 'box', text: 'Вкажіть, скільки зроблено' };
+  if (res.error === 'downtime') return { icon: 'pause', text: 'Простій забрав увесь час' };
+  if (!res.active.length && !res.otherMin) return { icon: 'box', text: 'Впишіть норму виробу' };
+  if (!res.hasInput) return { icon: 'box', text: 'Скільки зроблено?' };
   if (res.error === 'other') return { icon: 'info', text: 'Інших робіт більше, ніж робочого часу' };
   const g = toGoal(res, goal, base);
   const word = goal === 100 ? 'норми' : `мети ${goal}%`;
@@ -98,7 +95,7 @@ function statusOf(res, goal, base) {
     return { icon: 'sparkle', done: true, text: extra >= 0.05 ? `Норму виконано · +${fmt(extra)} шт понад` : 'Норму виконано' };
   }
   if (g.pieces != null) return { icon: 'target', text: `До ${word} ще ${fmt(g.pieces)} шт` };
-  return { icon: 'target', text: `До ${word} ще ${fmtMin(g.minutes)} нормо-часу` };
+  return { icon: 'target', text: `До ${word} ще ${fmtMin(g.minutes)} роботи` };
 }
 
 export function Today() {
@@ -113,11 +110,13 @@ export function Today() {
   const dirty = saved ? !sameRecord(record, saved) : !blank;
   const isToday = draft.date === today();
   const pace = useMemo(() => paceAt(draft, res, now), [draft, res, now]);
-  const lv = res.hasInput && res.valid ? level(res.pct, goal) : 'idle';
+  // поки зміна триває, колір — за темпом: 60% о півдні при темпі 120% — це добре, а не «червоно»
+  const live = isToday && pace?.state === 'live' && pace.pace != null;
+  const lv = res.hasInput && res.valid ? level(live ? pace.pace : res.pct, goal) : 'idle';
   const status = statusOf(res, goal, base);
   const odd = oddDay(res);
+  const approx = isApprox(record);
   const [sheet, setSheet] = useState(null);
-  const [tip, setTip] = useState(() => !store(TIP_KEY) && !Object.keys(days).length);
   const title = dateTitle(draft.date);
 
   // Свято, коли під час введення перетнули мету чи свій рекорд (раз на день)
@@ -144,6 +143,17 @@ export function Today() {
       buzz(25);
     }
   }, [res.pct, draft.date]);
+
+  // Картку з відсотком прокрутили вгору (вводять кількість нижче) — згори зʼявляється її стисла копія
+  const resultRef = useRef();
+  const [mini, setMini] = useState(false);
+  useEffect(() => {
+    const el = resultRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => setMini(!e.isIntersecting && e.boundingClientRect.top < 0), { rootMargin: '-48px 0px 0px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   const patch = (p) => setDraft((d) => ({ ...d, ...p }));
   const setProduct = (key, p) => setDraft((d) => ({ ...d, products: d.products.map((x) => (x.key === key ? { ...x, ...p } : x)) }));
@@ -188,8 +198,14 @@ export function Today() {
     setDraft((d) => ({ ...d, products: d.products.map((p) => ({ ...p, qty: '' })), downtime: [], others: [] }));
   }
 
+  const removeTime = (field, key) => setDraft((d) => ({ ...d, [field]: d[field].filter((x) => x.key !== key) }));
+  const checkOdd = () =>
+    odd.why === 'time'
+      ? setSheet({ type: 'shift' })
+      : document.querySelector(odd.why === 'down' ? '.trow.down' : '.pitem .step-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
   return (
-    <div class="screen">
+    <div class="screen today">
       <header class="topbar">
         <button class="round-btn" onClick={() => switchDate(addDays(draft.date, -1))} aria-label="Попередній день">
           <Icon name="left" />
@@ -210,146 +226,89 @@ export function Today() {
       {!isToday && (
         <div class="banner">
           <Icon name="history" size={18} />
-          <span>{saved?.sample ? 'Це день із прикладу — змініть щось, і він стане вашим.' : saved ? 'Минулий день · зміни зберігаються самі.' : 'Запис за минулий день · зберігається сам.'}</span>
+          <span>{saved?.sample ? 'День із прикладу — змініть щось, і він стане вашим' : 'Минулий день · зберігається сам'}</span>
           <button class="link" onClick={() => switchDate(today())}>
             До сьогодні
           </button>
         </div>
       )}
 
-      <section class={`panel lv-${lv}`}>
-        <Gauge pct={res.pct} goal={goal} />
-        <p class={`panel-status ${status.done ? 'done' : ''}`}>
-          <Icon name={status.icon} size={18} />
-          <span>{status.text}</span>
-        </p>
-        {isApprox(record) && <p class="panel-approx">≈ Орієнтовно: норма виробу поки приблизна</p>}
-        {odd && (
-          <div class="pace attention odd">
-            <Icon name="info" size={18} />
-            <span>
-              <b>{fmt(res.pct, 0)}% — схоже на помилку.</b> {odd.text}.{' '}
-              <button
-                class="link inline"
-                onClick={() =>
-                  odd.why === 'time'
-                    ? setSheet({ type: 'shift' })
-                    : document.querySelector(odd.why === 'down' ? '.tcard-down' : '.pitem .step-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                }
-              >
-                Перевірити
-              </button>
-            </span>
-          </div>
-        )}
-        <div class="panel-stats">
-          <div>
-            <span>Робочий час</span>
-            <b>{res.valid ? fmtHM(res.avail) : '—'}</b>
-          </div>
-          <div>
-            <span>Зароблено</span>
-            <b>{res.valid ? fmtHM(res.earned) : '—'}</b>
-          </div>
-          <div>
-            <span>Виробів</span>
-            <b>{fmt(res.pieces)}</b>
-          </div>
-        </div>
-        <Pace pace={pace} res={res} isToday={isToday} />
-        <div class="panel-foot">
-          <SaveChip sync={sync} dirty={dirty} invalid={!blank && !res.valid} blank={blank && !saved} onClick={() => setSheet({ type: 'sync' })} />
-          <button class="panel-how" onClick={() => setSheet({ type: 'how' })} disabled={!res.valid}>
-            <Icon name="info" size={15} /> Як пораховано
-          </button>
-        </div>
-      </section>
+      <ResultCard
+        boxRef={resultRef}
+        res={res}
+        goal={goal}
+        lv={lv}
+        status={status}
+        pace={isToday ? pace : null}
+        odd={odd}
+        approx={approx}
+        isToday={isToday}
+        save={blank && !saved ? null : <SaveChip sync={sync} dirty={dirty} invalid={!blank && !res.valid} onClick={() => setSheet({ type: 'sync' })} />}
+        onHow={() => setSheet({ type: 'how' })}
+        onCheck={checkOdd}
+      />
+      <MiniBar show={mini} res={res} goal={goal} lv={lv} status={status} approx={approx} />
 
-      {tip && (
-        <section class="card tip-card">
-          <div class="tip-head">
-            <span class="head-ico good">
-              <Icon name="bulb" size={17} />
-            </span>
-            <b>Як користуватися</b>
-            <button
-              class="icon-btn"
-              aria-label="Сховати підказку"
-              onClick={() => {
-                store(TIP_KEY, 1);
-                setTip(false);
-              }}
-            >
-              <Icon name="x" size={18} />
-            </button>
+      <ShiftRow draft={draft} res={res} settings={settings} onOpen={() => setSheet({ type: 'shift' })} />
+
+      <div class="plist">
+        {draft.products.map((p, i) => (
+          <ProductItem
+            key={p.key}
+            p={p}
+            idx={i}
+            line={res.lines[i]}
+            res={res}
+            base={base}
+            onChange={(x) => setProduct(p.key, x)}
+            onRemove={() => removeProduct(p)}
+            onPick={() => setSheet({ type: 'product', key: p.key })}
+            onFix={() => setSheet({ type: 'norm', key: p.key, name: p.name.trim() })}
+          />
+        ))}
+      </div>
+
+      {(draft.downtime.length > 0 || draft.others.length > 0) && (
+        <div class="card tlist">
+          {draft.downtime.map((it) => (
+            <TimeRow key={it.key} kind="down" item={it} onEdit={() => setSheet({ type: 'time', kind: 'down', item: it })} onRemove={() => removeTime('downtime', it.key)} />
+          ))}
+          {draft.others.map((it) => (
+            <TimeRow key={it.key} kind="other" item={it} onEdit={() => setSheet({ type: 'time', kind: 'other', item: it })} onRemove={() => removeTime('others', it.key)} />
+          ))}
+        </div>
+      )}
+
+      <div class="adds">
+        <button class="add-chip" onClick={() => addProduct()}>
+          <Icon name="plus" size={17} /> Виріб
+        </button>
+        <button class="add-chip down" onClick={() => setSheet({ type: 'time', kind: 'down' })}>
+          <Icon name="pause" size={17} /> Простій
+        </button>
+        <button class="add-chip other" onClick={() => setSheet({ type: 'time', kind: 'other' })}>
+          <Icon name="wrench" size={17} /> Інша робота
+        </button>
+      </div>
+
+      {settings.products.length > 0 && (
+        <div class="quick">
+          <span class="quick-label">Мої вироби</span>
+          <div class="quick-row">
+            {settings.products.map((sp) => (
+              <button class="qchip" key={sp.id} onClick={() => addProduct(sp)}>
+                <span>{sp.name || 'Без назви'}</span>
+                <em>
+                  {sp.approx ? '≈' : ''}
+                  {fmt(sp.norm)}
+                </em>
+              </button>
+            ))}
           </div>
-          <ol>
-            <li>Оберіть зміну — час і перерва підставляться самі.</li>
-            <li>Впишіть норму виробу за зміну і скільки зробили. Тримайте «+», щоб рахувати швидко.</li>
-            <li>Простій та інші роботи обирайте зі списку — з хвилинами.</li>
-            <li>Нічого зберігати вручну не треба: кожна зміна записується сама, а у «Статистиці» видно тенденцію й висновки.</li>
-          </ol>
-        </section>
+        </div>
       )}
 
       <BackupNudge mode={sync.mode} settings={settings} days={days} />
-
-      <ShiftCard draft={draft} res={res} settings={settings} isToday={isToday} now={now} onPatch={patch} onOpen={() => setSheet({ type: 'shift' })} />
-
-      <section class="card">
-        <CardHead icon="box" title="Вироби" aside={res.pieces > 0 ? `${fmt(res.pieces)} шт` : null} />
-        <div class="plist">
-          {draft.products.map((p, i) => (
-            <ProductItem
-              key={p.key}
-              p={p}
-              idx={i}
-              line={res.lines[i]}
-              res={res}
-              onChange={(x) => setProduct(p.key, x)}
-              onRemove={() => removeProduct(p)}
-              onPick={() => setSheet({ type: 'product', key: p.key })}
-              onFix={() => setSheet({ type: 'norm', key: p.key, name: p.name.trim() })}
-            />
-          ))}
-        </div>
-        <button class="add-btn" onClick={() => addProduct()}>
-          <Icon name="plus" size={18} /> Додати виріб
-        </button>
-        {settings.products.length > 0 && (
-          <div class="quick">
-            <span class="quick-label">Мої вироби</span>
-            <div class="quick-row">
-              {settings.products.map((sp) => (
-                <button class="qchip" key={sp.id} onClick={() => addProduct(sp)}>
-                  <span>{sp.name || 'Без назви'}</span>
-                  <em>
-                    {sp.approx ? '≈' : ''}
-                    {fmt(sp.norm)}
-                  </em>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <TimeCard
-        kind="down"
-        items={draft.downtime}
-        total={res.downMin}
-        onAdd={() => setSheet({ type: 'time', kind: 'down' })}
-        onEdit={(item) => setSheet({ type: 'time', kind: 'down', item })}
-        onRemove={(key) => setDraft((d) => ({ ...d, downtime: d.downtime.filter((x) => x.key !== key) }))}
-      />
-      <TimeCard
-        kind="other"
-        items={draft.others}
-        total={res.otherMin}
-        onAdd={() => setSheet({ type: 'time', kind: 'other' })}
-        onEdit={(item) => setSheet({ type: 'time', kind: 'other', item })}
-        onRemove={(key) => setDraft((d) => ({ ...d, others: d.others.filter((x) => x.key !== key) }))}
-      />
 
       {isToday && <MonthCard days={days} settings={settings} date={draft.date} res={res} onGoal={() => setSheet({ type: 'mgoal' })} />}
 
@@ -379,7 +338,7 @@ export function Today() {
       {sheet?.type === 'how' && (
         <Sheet
           title="Як пораховано"
-          sub={`${title.main} · ${draft.shiftName || 'свій час'}`}
+          sub={`${title.main} · ${fmtTime(draft.start)}–${fmtTime(draft.end)}`}
           onClose={() => setSheet(null)}
           tall
           footer={
@@ -396,9 +355,7 @@ export function Today() {
         <MonthGoalSheet month={draft.date.slice(0, 7)} days={days} settings={settings} setSettings={setSettings} todayISO={today()} onClose={() => setSheet(null)} />
       )}
       {sheet?.type === 'sync' && <SyncSheet sync={sync} settings={settings} days={days} signIn={signIn} onClose={() => setSheet(null)} />}
-      {sheet?.type === 'shift' && (
-        <ShiftSheet draft={draft} res={res} settings={settings} setSettings={setSettings} onApply={patch} onClose={() => setSheet(null)} />
-      )}
+      {sheet?.type === 'shift' && <ShiftSheet draft={draft} res={res} settings={settings} isToday={isToday} now={now} onApply={patch} onClose={() => setSheet(null)} />}
       {sheet?.type === 'product' && (
         <ProductSheet
           item={draft.products.find((p) => p.key === sheet.key)}
@@ -429,8 +386,7 @@ export function Today() {
             setSheet(null);
           }}
           onDelete={(key) => {
-            const field = sheet.kind === 'down' ? 'downtime' : 'others';
-            setDraft((d) => ({ ...d, [field]: d[field].filter((x) => x.key !== key) }));
+            removeTime(sheet.kind === 'down' ? 'downtime' : 'others', key);
             setSheet(null);
           }}
           onClose={() => setSheet(null)}
@@ -440,141 +396,168 @@ export function Today() {
   );
 }
 
-// ---------- Зміна: вхід і вихід ----------
+// ---------- Результат ----------
 
-const nowHM = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
-function ShiftCard({ draft, res, settings, isToday, now, onPatch, onOpen }) {
-  const preset = settings.shifts.find((s) => s.name === draft.shiftName);
-  const planned = preset ? shiftLength(preset.start, preset.end) : null;
-  const diff = planned != null && res.shiftMin > 0 ? res.shiftMin - planned : 0;
+/** Відсоток, що робити далі, смуга до норми і темп — усе, заради чого відкривають калькулятор. */
+function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday, save, onHow, onCheck }) {
+  const has = res.hasInput && res.valid;
+  const shown = useTween(has ? res.pct : 0);
   const single = res.valid && res.active.length === 1 && res.otherMin === 0 ? res.active[0] : null;
-  const dPieces = single && diff ? (single.norm * Math.abs(diff)) / settings.base : 0;
-  const t = nowHM(now);
+  let sub = null;
+  if (single) sub = `Норма на ${isToday ? 'сьогодні' : 'день'}: ${fmt(single.dayNorm)} шт`;
+  else if (has) sub = `Нормо-час ${fmtHM(res.earned)} з ${fmtHM(res.avail)}`;
   return (
-    <section class="card shiftbox">
-      <button class="shift-top" onClick={onOpen}>
-        <span class="head-ico">
-          <Icon name="clock" size={17} />
-        </span>
-        <span class="shift-main">
-          <b>{draft.shiftName || 'Свій час'}</b>
-          <small>
-            {preset ? `графік ${fmtTime(preset.start)}–${fmtTime(preset.end)} · ` : ''}перерва {fmtMin(num(draft.brk))}
-          </small>
-        </span>
-        <span class="shift-work">
-          <b>{res.workMin > 0 ? fmtMin(res.workMin) : '—'}</b>
-          <small>роботи</small>
-        </span>
-        <Icon name="right" size={18} class="faint" />
-      </button>
-      <div class="punch">
-        <PunchBox label="Вхід" value={draft.start} now={isToday && draft.start !== t ? t : null} onChange={(v) => onPatch({ start: v })} />
-        <PunchBox label="Вихід" value={draft.end} now={isToday && draft.end !== t ? t : null} onChange={(v) => onPatch({ end: v })} />
+    <section class={`result lv-${lv}`} ref={boxRef}>
+      <div class="r-top">
+        <button class="r-num" onClick={onHow} disabled={!res.valid} aria-label={`Виконання ${pctText(has ? res.pct : 0)}%. Як пораховано`}>
+          {approx && <i>≈</i>}
+          {pctText(shown, 1)}
+          <small>%</small>
+        </button>
+        <div class="r-tools">
+          {save}
+          <button class="r-ico" onClick={onHow} disabled={!res.valid} aria-label="Як пораховано">
+            <Icon name="info" size={18} />
+          </button>
+        </div>
       </div>
-      {diff !== 0 && (
-        <p class={`punch-note ${diff < 0 ? 'less' : 'more'}`}>
-          <Icon name={diff < 0 ? 'down2' : 'up'} size={15} />
+      <p class={`r-status ${status.done ? 'done' : ''}`}>
+        <Icon name={status.icon} size={18} />
+        <span>{status.text}</span>
+      </p>
+      {sub && <p class="r-sub">{sub}</p>}
+      <ProgressBar res={res} goal={goal} pace={pace} />
+      <PaceLine pace={pace} res={res} />
+      {odd && (
+        <div class="r-odd">
+          <Icon name="info" size={17} />
           <span>
-            {diff < 0 ? `На ${fmtMin(-diff)} менше` : `На ${fmtMin(diff)} більше`} за графік — норма на день {diff < 0 ? 'менша' : 'більша'}
-            {dPieces >= 0.05 ? ` на ${fmt(dPieces)} шт` : ''}
+            <b>{fmt(res.pct, 0)}% — схоже на помилку.</b> {odd.text}.{' '}
+            <button class="link inline" onClick={onCheck}>
+              Перевірити
+            </button>
           </span>
-        </p>
+        </div>
       )}
     </section>
   );
 }
 
-function PunchBox({ label, value, now, onChange }) {
+/** Смуга до мети; біла риска — де за графіком маєте бути зараз. */
+function ProgressBar({ res, goal, pace }) {
+  const fill = res.hasInput && res.valid ? Math.min(100, (res.pct / goal) * 100) : 0;
   return (
-    <div class="punch-box">
-      <label>
-        <span class="punch-label">{label}</span>
-        <input type="time" step="60" value={value} aria-label={`${label}, час`} onChange={(e) => e.currentTarget.value && onChange(e.currentTarget.value)} />
-      </label>
-      {now && (
-        <button class="punch-now" onClick={() => onChange(now)} aria-label={`${label} — зараз, ${fmtTime(now)}`}>
-          зараз
-        </button>
-      )}
+    <div class="r-bar" aria-hidden="true">
+      <i style={{ width: `${fill}%` }} />
+      {pace?.state === 'live' && <b style={{ left: `${Math.min(100, pace.frac * 100)}%` }} />}
     </div>
   );
 }
 
-// ---------- Темп зміни ----------
-
-function Pace({ pace, res, isToday }) {
+function PaceLine({ pace, res }) {
   if (!pace) return null;
-  if (pace.state === 'before') {
-    if (!isToday || pace.inMin > 12 * 60) return null;
-    return (
-      <div class="pace">
-        <Icon name="clock" size={16} />
+  if (pace.state === 'before')
+    return pace.inMin > 12 * 60 ? null : (
+      <p class="r-pace">
+        <Icon name="clock" size={15} />
         <span>Зміна почнеться через {fmtMin(pace.inMin)}</span>
-      </div>
+      </p>
     );
+  if (pace.state === 'after')
+    return res.hasInput && res.valid ? (
+      <p class="r-pace">
+        <Icon name="check" size={15} />
+        <span>Зміну завершено — день збережено</span>
+      </p>
+    ) : null;
+  // один виріб — наскільки випереджаєте графік у штуках; кілька — темп (прогноз на кінець зміни)
+  let text = 'Зміна триває';
+  if (res.hasInput && pace.pace != null) {
+    const d = pace.diffPieces;
+    if (d == null) text = `Темп ${fmt(pace.pace, 0)}%`;
+    else text = Math.abs(d) < 0.5 ? 'Точно за графіком' : d > 0 ? `Випереджаєте на ${fmt(d, 0)} шт` : `Відстаєте на ${fmt(-d, 0)} шт`;
   }
-  if (pace.state === 'after') {
-    if (!isToday || !res.hasInput || !res.valid) return null;
-    return (
-      <div class="pace">
-        <Icon name="check" size={16} />
-        <span>Зміна завершилась — день уже в історії та статистиці</span>
-      </div>
-    );
-  }
-  const ahead = pace.diffPieces != null ? pace.diffPieces : null;
   return (
-    <div class="pace live">
-      <div class="pace-top">
-        <span class="live-dot" />
-        {res.hasInput && pace.pace != null ? (
-          <span>
-            <b>Темп {fmt(pace.pace, 0)}%</b>
-            {ahead != null
-              ? Math.abs(ahead) < 0.5
-                ? ' · точно за графіком'
-                : ahead > 0
-                  ? ` · випереджаєте на ${fmt(ahead, 0)} шт`
-                  : ` · відстаєте на ${fmt(-ahead, 0)} шт`
-              : ` · прогноз ≈ ${fmt(pace.pace, 0)}% на кінець`}
-          </span>
-        ) : (
-          <span>
-            Зміна триває · лишилось <b>{fmtMin(pace.left)}</b>
-          </span>
-        )}
+    <p class="r-pace">
+      <span class="live-dot" />
+      <span class="grow">{text}</span>
+      <span class="r-left">ще {fmtMin(pace.left)}</span>
+    </p>
+  );
+}
+
+/** Стисла копія результату згори екрана, поки картка з відсотком прокручена. */
+function MiniBar({ show, res, goal, lv, status, approx }) {
+  const has = res.hasInput && res.valid;
+  return (
+    <div class={`r-mini lv-${lv} ${show ? 'on' : ''}`} aria-hidden="true" onClick={() => scrollTo({ top: 0, behavior: 'smooth' })}>
+      <div class="r-mini-in">
+        <b>
+          {approx ? '≈' : ''}
+          {pctText(has ? res.pct : 0, 1)}%
+        </b>
+        <span>{status.text}</span>
       </div>
-      <div class="pace-bar" aria-hidden="true">
-        <i style={{ width: `${Math.min(100, pace.frac * 100)}%` }} />
-      </div>
-      {res.hasInput && pace.expectedPieces != null && (
-        <div class="pace-note">
-          За графіком зараз ≈ {fmt(pace.expectedPieces, 0)} шт · лишилось {fmtMin(pace.left)}
-        </div>
-      )}
+      <i style={{ width: `${has ? Math.min(100, (res.pct / goal) * 100) : 0}%` }} />
     </div>
+  );
+}
+
+// ---------- Зміна: вхід і вихід ----------
+
+const nowHM = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+/** Один рядок: фактичні вхід–вихід і перерва; відхилення від графіка — позначкою. */
+function ShiftRow({ draft, res, settings, onOpen }) {
+  const preset = settings.shifts.find((s) => s.name === draft.shiftName);
+  const diff = preset && res.workMin > 0 ? res.workMin - (shiftLength(preset.start, preset.end) - preset.brk) : 0;
+  return (
+    <button class="shift-row" onClick={onOpen} aria-label="Зміна: вхід, вихід і перерва">
+      <span class="head-ico">
+        <Icon name="clock" size={17} />
+      </span>
+      <span class="sr-main">
+        <b>
+          {fmtTime(draft.start)} – {fmtTime(draft.end)}
+        </b>
+        <small>
+          {settings.shifts.length > 1 && draft.shiftName ? `${draft.shiftName} · ` : ''}перерва {fmtMin(num(draft.brk))}
+        </small>
+      </span>
+      <span class="sr-work">
+        <b>{res.workMin > 0 ? fmtMin(res.workMin) : '—'}</b>
+        <small>
+          роботи
+          {Math.abs(diff) >= 1 && (
+            <em class={diff < 0 ? 'less' : 'more'}>
+              {' · '}
+              {diff < 0 ? '−' : '+'}
+              {fmtMin(Math.abs(diff))}
+            </em>
+          )}
+        </small>
+      </span>
+      <Icon name="right" size={16} class="faint" />
+    </button>
   );
 }
 
 // ---------- Збереження ----------
 
 function privacyText({ mode, provider }) {
-  if (mode === 'cloud' && provider === 'norma') return 'Дані зберігаються самі у вашому акаунті. Бачите їх ви та адміністратор.';
-  if (mode === 'cloud') return 'Дані зберігаються самі у вашому особистому розділі акаунта Claude. Бачите їх лише ви.';
-  if (mode === 'connecting') return 'Дані зберігаються самі — спершу на телефоні, потім в акаунті.';
-  return 'Дані зберігаються самі, лише на цьому телефоні. Нікуди не надсилаються.';
+  if (mode === 'cloud' && provider === 'norma') return 'Зберігається само у вашому акаунті. Бачите ви та адміністратор.';
+  if (mode === 'cloud') return 'Зберігається само в особистому розділі акаунта Claude.';
+  if (mode === 'connecting') return 'Зберігається само — на телефоні, потім в акаунті.';
+  return 'Зберігається само, лише на цьому телефоні.';
 }
 
-function SaveChip({ sync, dirty, invalid, blank, onClick }) {
+function SaveChip({ sync, dirty, invalid, onClick }) {
   const cloud = sync.mode === 'cloud';
   let s;
   if (invalid) s = { tone: 'warn', icon: 'info', text: 'Не збережено' };
   else if (dirty || (cloud && sync.status === 'saving')) s = { tone: 'busy', icon: cloud ? 'cloud' : 'phone', text: 'Зберігаю…' };
   else if (cloud && sync.status === 'error') s = { tone: 'warn', icon: 'cloudOff', text: 'Лише на телефоні' };
   else if (sync.mode === 'connecting') s = { tone: '', icon: 'cloud', text: 'Підключаю…' };
-  else if (blank) s = { tone: '', icon: cloud ? 'cloud' : 'phone', text: 'Автозбереження' };
   else s = { tone: 'ok', icon: cloud ? 'cloudCheck' : 'phone', text: cloud ? 'Збережено' : 'На телефоні' };
   return (
     <button class={`savechip ${s.tone}`} onClick={onClick} aria-label={`Збереження: ${s.text}`}>
@@ -788,63 +771,11 @@ function DayContext({ days, date, record, res, goal, isToday }) {
 
 // ---------- Виріб ----------
 
-function ProductItem({ p, idx, line, res, onChange, onRemove, onPick, onFix }) {
+function ProductItem({ p, idx, line, res, base, onChange, onRemove, onPick, onFix }) {
   const norm = num(p.norm);
-  const single = res.active.length === 1 && norm > 0;
-  const lvl = single && line ? level(line.pct, 100) : 'idle';
+  // кілька виробів (чи ще інші роботи) — частка кожного у відсотку дня; разом вони дають загальний відсоток
+  const share = res.valid && norm > 0 && line && (res.active.length > 1 || res.otherMin > 0) ? (line.minutes / res.avail) * 100 : null;
   const focusNorm = () => setTimeout(() => document.querySelector(`[data-pkey="${p.key}"] .numbox input`)?.focus(), 30);
-  let meter = null;
-  if (!norm && p.approx)
-    meter = (
-      <p class="pm-hint">
-        Впишіть приблизну норму — коли зʼявиться точна, її можна буде уточнити.{' '}
-        <button class="link inline" onClick={() => onChange({ approx: false })}>
-          Скасувати
-        </button>
-      </p>
-    );
-  else if (!norm)
-    meter = (
-      <p class="pm-hint">
-        Вкажіть норму за зміну — і побачите відсоток.{' '}
-        <button
-          class="link inline"
-          onClick={() => {
-            onChange({ approx: true });
-            focusNorm();
-          }}
-        >
-          Норми ще немає?
-        </button>
-      </p>
-    );
-  else if (!res.valid) meter = null;
-  else if (single)
-    meter = (
-      <div class="pmeter">
-        <div class="pm-row">
-          <span>Норма на сьогодні {fmt(line.dayNorm)} шт</span>
-          <b class={`lv-text ${lvl}`}>{pctText(line.pct)}%</b>
-        </div>
-        <div class={`bar lv-${lvl}`}>
-          <i style={{ width: `${Math.min(100, line.pct)}%` }} />
-        </div>
-      </div>
-    );
-  else {
-    const share = res.avail > 0 ? (line.minutes / res.avail) * 100 : 0;
-    meter = (
-      <div class="pmeter">
-        <div class="pm-row">
-          <span>Нормо-час {fmtMin(line.minutes)}</span>
-          <b>{fmt(share, 0)}% дня</b>
-        </div>
-        <div class="bar lv-accent">
-          <i style={{ width: `${Math.min(100, share)}%` }} />
-        </div>
-      </div>
-    );
-  }
   return (
     <div class="pitem" data-pkey={p.key}>
       <div class="pitem-top">
@@ -852,20 +783,21 @@ function ProductItem({ p, idx, line, res, onChange, onRemove, onPick, onFix }) {
           <span class={`pname-text ${p.name ? '' : 'ph'}`}>{p.name || `Виріб ${idx + 1}`}</span>
           <Icon name="down" size={16} class="faint" />
         </button>
+        {share != null && <span class="p-share">{pctText(share, 0)}% дня</span>}
         <button class="icon-btn" onClick={onRemove} aria-label="Прибрати виріб">
           <Icon name="x" size={18} />
         </button>
       </div>
       <div class="pitem-grid">
         <label class="mini">
-          <span class="mini-label">Норма за зміну</span>
+          <span class="mini-label">Норма за {fmtMin(base)}</span>
           <span class={`numbox ${p.approx ? 'approx' : ''}`}>
             {p.approx && <i class="approx-sign">≈</i>}
             <input
               inputMode="decimal"
               value={p.norm}
               placeholder="—"
-              aria-label="Норма за зміну, шт"
+              aria-label={`Норма за ${fmtMin(base)}, шт`}
               onFocus={(e) => e.currentTarget.select()}
               onInput={(e) => onChange({ norm: cleanNum(e.currentTarget.value) })}
             />
@@ -877,13 +809,29 @@ function ProductItem({ p, idx, line, res, onChange, onRemove, onPick, onFix }) {
           <Stepper value={p.qty} onChange={(v) => onChange({ qty: v })} label="Зроблено, шт" />
         </div>
       </div>
-      {meter}
-      {p.approx && norm > 0 && (
+      {!norm && !p.approx && (
+        <button
+          class="link small p-hint"
+          onClick={() => {
+            onChange({ approx: true });
+            focusNorm();
+          }}
+        >
+          Норми ще немає?
+        </button>
+      )}
+      {p.approx && (
         <div class="approx-note">
-          <span>Норма приблизна — відсоток орієнтовний</span>
-          <button class="btn soft small" onClick={onFix}>
-            Уточнити
-          </button>
+          <span>{norm > 0 ? 'Норма приблизна — відсоток орієнтовний' : 'Приблизна норма — потім уточните'}</span>
+          {norm > 0 ? (
+            <button class="btn soft small" onClick={onFix}>
+              Уточнити
+            </button>
+          ) : (
+            <button class="btn soft small" onClick={() => onChange({ approx: false })}>
+              Скасувати
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -892,36 +840,22 @@ function ProductItem({ p, idx, line, res, onChange, onRemove, onPick, onFix }) {
 
 // ---------- Простій та інші роботи ----------
 
-function TimeCard({ kind, items, total, onAdd, onEdit, onRemove }) {
+function TimeRow({ kind, item, onEdit, onRemove }) {
   const down = kind === 'down';
   return (
-    <section class={`card tcard-${kind}`}>
-      <CardHead icon={down ? 'pause' : 'wrench'} tone={down ? 'warn' : 'teal'} title={down ? 'Простій' : 'Інші роботи'} aside={total > 0 ? `${down ? '−' : '+'}${fmtMin(total)}` : null} />
-      {!items.length && (
-        <p class="card-hint">
-          {down ? 'Коли працювати не було змоги: зменшує робочий час і норму на день.' : 'Робота не з виробами. Зараховується година в годину: 1 год = 1 год норми.'}
-        </p>
-      )}
-      {items.length > 0 && (
-        <div class="tlist">
-          {items.map((it) => (
-            <div class="trow" key={it.key}>
-              <button class="trow-main" onClick={() => onEdit(it)}>
-                <span class={`tdot ${kind}`} />
-                <span class="tname">{down ? it.reason : it.kind}</span>
-                <span class={`tmin ${kind}`}>{fmtMin(it.min)}</span>
-              </button>
-              <button class="icon-btn" onClick={() => onRemove(it.key)} aria-label="Прибрати">
-                <Icon name="x" size={16} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <button class={`add-btn ${kind}`} onClick={onAdd}>
-        <Icon name="plus" size={18} /> {down ? 'Додати простій' : 'Додати інші роботи'}
+    <div class={`trow ${kind}`}>
+      <button class="trow-main" onClick={onEdit}>
+        <span class={`tdot ${kind}`} />
+        <span class="tname">{down ? item.reason : item.kind}</span>
+        <span class={`tmin ${kind}`}>
+          {down ? '−' : '+'}
+          {fmtMin(item.min)}
+        </span>
       </button>
-    </section>
+      <button class="icon-btn" onClick={onRemove} aria-label="Прибрати">
+        <Icon name="x" size={16} />
+      </button>
+    </div>
   );
 }
 
@@ -1064,74 +998,51 @@ function TimeSheet({ kind, item, draft, base, settings, setSettings, onSave, onD
 
 // ---------- Зміна ----------
 
-function ShiftSheet({ draft, res, settings, setSettings, onApply, onClose }) {
-  const [naming, setNaming] = useState(false);
-  const [newName, setNewName] = useState('');
-  const match = settings.shifts.find((s) => s.name === draft.shiftName);
-  // вхід і вихід — фактичні (по прохідній); назва зміни лишається, бо від неї перерва і статистика за змінами
-  const setTime = (p) => onApply(p);
-  function saveAsPreset() {
-    const name = newName.trim();
-    if (!name) return;
-    setSettings((s) => ({ ...s, shifts: [...s.shifts, { id: newKey(), name, start: draft.start, end: draft.end, brk: num(draft.brk) }] }));
-    onApply({ shiftName: name });
-    setNaming(false);
-  }
+function ShiftSheet({ draft, res, settings, isToday, now, onApply, onClose }) {
+  const plan = settings.shifts.find((s) => s.name === draft.shiftName) || settings.shifts[0];
+  const off = plan && (plan.start !== draft.start || plan.end !== draft.end || plan.brk !== num(draft.brk));
+  const t = isToday ? nowHM(now) : null;
   return (
     <Sheet
       title="Зміна"
-      sub="Від зміни — перерва; вхід і вихід вказуєте фактичні"
+      sub="Вхід і вихід — фактичні, по прохідній"
       onClose={onClose}
-      tall
       footer={
         <button class="btn primary block" onClick={onClose}>
           Готово
         </button>
       }
     >
-      <div class="presets">
-        {settings.shifts.map((s) => {
-          const on = s.name === draft.shiftName;
-          return (
-            <button
-              class={`preset ${on ? 'on' : ''}`}
-              key={s.id}
-              onClick={() => {
-                onApply({ shiftName: s.name, start: s.start, end: s.end, brk: s.brk });
-                onClose();
-              }}
-            >
-              <span class="preset-main">
-                <b>{s.name}</b>
-                <small>
-                  {fmtTime(s.start)}–{fmtTime(s.end)} · перерва {fmtMin(s.brk)}
-                </small>
-              </span>
-              <span class="preset-work">{fmtMin(shiftLength(s.start, s.end) - s.brk)}</span>
-              <span class="preset-check">{on && <Icon name="check" size={18} />}</span>
-            </button>
-          );
-        })}
-        <button class={`preset ${!match ? 'on' : ''}`} onClick={() => onApply({ shiftName: '' })}>
-          <span class="preset-main">
-            <b>Свій час</b>
-            <small>Без графіка — лише вхід, вихід і перерва</small>
-          </span>
-          <span class="preset-work" />
-          <span class="preset-check">{!match && <Icon name="check" size={18} />}</span>
-        </button>
-      </div>
+      {settings.shifts.length > 1 && (
+        <div class="presets">
+          {settings.shifts.map((s) => {
+            const on = s.name === draft.shiftName;
+            return (
+              <button
+                class={`preset ${on ? 'on' : ''}`}
+                key={s.id}
+                onClick={() => {
+                  onApply({ shiftName: s.name, start: s.start, end: s.end, brk: s.brk });
+                  onClose();
+                }}
+              >
+                <span class="preset-main">
+                  <b>{s.name}</b>
+                  <small>
+                    {fmtTime(s.start)}–{fmtTime(s.end)} · перерва {fmtMin(s.brk)}
+                  </small>
+                </span>
+                <span class="preset-work">{fmtMin(shiftLength(s.start, s.end) - s.brk)}</span>
+                <span class="preset-check">{on && <Icon name="check" size={18} />}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      <div class="sec-label">Вхід і вихід по прохідній</div>
       <div class="grid2">
-        <label class="field">
-          <span class="field-label">Вхід</span>
-          <input class="input time" type="time" step="300" value={draft.start} onChange={(e) => e.currentTarget.value && setTime({ start: e.currentTarget.value })} />
-        </label>
-        <label class="field">
-          <span class="field-label">Вихід</span>
-          <input class="input time" type="time" step="300" value={draft.end} onChange={(e) => e.currentTarget.value && setTime({ end: e.currentTarget.value })} />
-        </label>
+        <TimeField label="Вхід" value={draft.start} now={t} onChange={(v) => onApply({ start: v })} />
+        <TimeField label="Вихід" value={draft.end} now={t} onChange={(v) => onApply({ end: v })} />
       </div>
       <div class="grid2">
         <label class="field">
@@ -1150,26 +1061,28 @@ function ShiftSheet({ draft, res, settings, setSettings, onApply, onClose }) {
         </div>
       </div>
       {res.shiftMin > 0 && toMinutesSafe(draft.end) <= toMinutesSafe(draft.start) && <p class="hint">Зміна переходить через північ — це враховано.</p>}
-
-      {match && (match.start !== draft.start || match.end !== draft.end) && (
-        <p class="hint">
-          За графіком «{match.name}» {fmtTime(match.start)}–{fmtTime(match.end)}. Рахується фактичний час: {fmtTime(draft.start)}–{fmtTime(draft.end)}.
-        </p>
-      )}
-      {!match && res.workMin > 0 && !naming && (
-        <button class="link" onClick={() => setNaming(true)}>
-          <Icon name="bookmark" size={16} /> Зберегти цей час як нову зміну
+      {off && (
+        <button class="link" onClick={() => onApply({ shiftName: plan.name, start: plan.start, end: plan.end, brk: plan.brk })}>
+          <Icon name="reset" size={16} /> Як у графіку: {fmtTime(plan.start)}–{fmtTime(plan.end)}, перерва {fmtMin(plan.brk)}
         </button>
       )}
-      {naming && (
-        <div class="inline-form">
-          <input class="input" data-autofocus maxLength={40} placeholder="Назва зміни, напр.: Нічна" value={newName} onInput={(e) => setNewName(e.currentTarget.value)} />
-          <button class="btn primary" disabled={!newName.trim()} onClick={saveAsPreset}>
-            Зберегти
-          </button>
-        </div>
-      )}
     </Sheet>
+  );
+}
+
+function TimeField({ label, value, now, onChange }) {
+  return (
+    <div class="field">
+      <span class="field-label field-row">
+        {label}
+        {now && now !== value && (
+          <button class="link small" onClick={() => onChange(now)}>
+            зараз {fmtTime(now)}
+          </button>
+        )}
+      </span>
+      <input class="input time" type="time" step="60" aria-label={label} value={value} onChange={(e) => e.currentTarget.value && onChange(e.currentTarget.value)} />
+    </div>
   );
 }
 

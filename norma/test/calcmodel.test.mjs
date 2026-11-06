@@ -160,12 +160,33 @@ test('періоди і зсув', () => {
 });
 
 test('налаштування: значення за замовчуванням і захист від сміття', () => {
-  const s = normalizeSettings({ goal: 'abc', base: -5, shifts: [{ name: 'X', start: '08:00', end: '08:00' }], products: [{ name: 'A', norm: 0 }, { name: 'B', norm: '12,5' }] });
+  const s = normalizeSettings({ v: 3, goal: 'abc', base: -5, shifts: [{ name: 'X', start: '08:00', end: '08:00' }], products: [{ name: 'A', norm: 0 }, { name: 'B', norm: '12,5' }] });
   assert.equal(s.goal, 100);
   assert.equal(s.base, 420);
   assert.equal(s.shifts.length, 0);
   assert.deepEqual(s.products.map((p) => [p.name, p.norm]), [['B', 12.5]]);
-  assert.equal(normalizeSettings(null).shifts.length, 4);
+  const def = normalizeSettings(null);
+  assert.equal(def.shifts.length, 1);
+  assert.deepEqual([def.shifts[0].start, def.shifts[0].end, def.shifts[0].brk], ['06:30', '19:30', 60]);
+});
+
+test('налаштування: старі зміни замінює одна 6:30–19:30, нові лишаються як є', () => {
+  const old = [
+    { id: 's1', name: '1 зміна', start: '06:30', end: '14:30', brk: 60 },
+    { id: 's2', name: '2 зміна', start: '14:30', end: '22:30', brk: 60 },
+  ];
+  const s = normalizeSettings({ v: 2, shifts: old, products: [{ name: 'B', norm: 35 }] });
+  assert.equal(s.v, 3);
+  assert.deepEqual(s.shifts.map((x) => `${x.start}–${x.end}`), ['06:30–19:30']);
+  assert.equal(s.products.length, 1);
+  // уже нова версія: свої зміни (наприклад, додана нічна) не чіпаємо
+  const mine = [...s.shifts, { id: 'n', name: 'Нічна', start: '19:30', end: '06:30', brk: 60 }];
+  assert.equal(normalizeSettings({ ...s, shifts: mine }).shifts.length, 2);
+  // 13 год − 1 год перерви = 12 год; норма 35 шт на 7 год → 60 шт на день
+  const c = computeDay({ start: '06:30', end: '19:30', brk: 60, products: [{ norm: 35, qty: 60 }] }, 420);
+  assert.equal(c.workMin, 720);
+  close(c.lines[0].dayNorm, 60);
+  close(c.pct, 100);
 });
 
 test('приклад історії: лише будні, не чіпає справжні дні, позначений', () => {
@@ -350,16 +371,20 @@ test('стан місяця: календарний місяць, нестача
 
 test('новий день: зміна з попереднього, а вхід і вихід — за графіком', async () => {
   const { newDraft } = await import('../src/calc/store.js');
-  const settings = normalizeSettings({});
-  const prev = { ...rec('2026-10-29', 30), shiftName: '1 зміна', start: '06:40', end: '14:15', brk: 60 };
+  const night = { id: 'n', name: 'Нічна', start: '19:30', end: '06:30', brk: 60 };
+  const settings = normalizeSettings({ v: 3, shifts: [...normalizeSettings({}).shifts, night] });
+  const prev = { ...rec('2026-10-29', 30), shiftName: 'Нічна', start: '19:40', end: '06:15', brk: 60 };
   const d = newDraft('2026-10-30', settings, { '2026-10-29': prev });
-  assert.equal(d.shiftName, '1 зміна');
-  assert.equal(d.start, '06:30');
-  assert.equal(d.end, '14:30');
-  // свій час без графіка — береться як був
-  const own = newDraft('2026-10-30', settings, { '2026-10-29': { ...prev, shiftName: '' } });
-  assert.equal(own.start, '06:40');
-  assert.equal(own.end, '14:15');
+  assert.equal(d.shiftName, 'Нічна');
+  assert.equal(d.start, '19:30');
+  assert.equal(d.end, '06:30');
+  assert.equal(d.products[0].norm, '35');
+  assert.equal(d.products[0].qty, '');
+  // зміни з учорашнього дня вже немає (старий графік чи свій час) — основна 6:30–19:30
+  for (const shiftName of ['1 зміна', '']) {
+    const x = newDraft('2026-10-30', settings, { '2026-10-29': { ...prev, shiftName } });
+    assert.deepEqual([x.shiftName, x.start, x.end, x.brk], ['Основна зміна', '06:30', '19:30', 60]);
+  }
   // вхід 6:30, вихід 14:15, перерва 1 год → 6 год 45 хв, норма 35 шт → 33,75 шт на день
   const c = computeDay({ ...prev, start: '06:30', end: '14:15' }, 420);
   assert.equal(c.shiftMin, 465);

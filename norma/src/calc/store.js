@@ -1,7 +1,7 @@
 // Памʼять браузера (localStorage): миттєвий кеш і запасне сховище.
 // В акаунті дані лежать на сервері — див. cloud.js; тут лише копія для швидкого запуску й роботи без мережі.
 // Кожен акаунт має власні ключі (norma.v2.u.<id>.*), щоб на спільному телефоні дані різних людей не змішались.
-import { DEFAULT_SETTINGS, newKey, normalizeSettings, num, shiftLength } from './model.js';
+import { DEFAULT_SETTINGS, DEFAULT_SHIFTS, isBlank, newKey, normalizeSettings, num, shiftLength } from './model.js';
 
 const LEGACY = 'norma.v2.';
 let prefix = LEGACY;
@@ -78,10 +78,15 @@ export function draftFromRecord(r) {
   };
 }
 
+/** Зміна з налаштувань за назвою, інакше перша (основна). */
+export const mainShift = (settings, name) =>
+  (name && settings.shifts.find((s) => s.name === name)) || settings.shifts[0] || DEFAULT_SHIFTS[0];
+
 /**
  * Нова чернетка на дату: зміна і вироби — як в останній збережений день перед нею
  * (кількості порожні), бо зазвичай роблять те саме. Вхід і вихід — за графіком цієї зміни,
- * а не фактичні вчорашні: їх працівник поправить сам.
+ * а не фактичні вчорашні: їх працівник поправить сам. Якщо такої зміни вже немає
+ * (графік змінився або день був «свій час») — основна зміна з налаштувань.
  */
 export function newDraft(date, settings, days) {
   const prevDate = Object.keys(days)
@@ -89,15 +94,13 @@ export function newDraft(date, settings, days) {
     .sort()
     .pop();
   const prev = prevDate ? days[prevDate] : null;
-  const preset = prev && settings.shifts.find((s) => s.name === prev.shiftName);
-  const shift = preset || (prev ? null : settings.shifts[0]) || { name: '', start: '08:00', end: '16:00', brk: 60 };
-  const src = preset || !prev ? shift : prev;
+  const shift = mainShift(settings, prev?.shiftName);
   return {
     date,
-    shiftName: prev ? prev.shiftName : shift.name,
-    start: src.start,
-    end: src.end,
-    brk: src.brk,
+    shiftName: shift.name,
+    start: shift.start,
+    end: shift.end,
+    brk: shift.brk,
     products: prev?.products?.length
       ? prev.products.map((p) => ({ key: newKey(), name: p.name || '', norm: str(p.norm), qty: '', ...(p.approx ? { approx: true } : {}) }))
       : [{ key: newKey(), name: '', norm: '', qty: '' }],
@@ -170,6 +173,11 @@ export function loadAll(todayISO) {
   let days = read(K.days, {});
   if (!days || typeof days !== 'object' || Array.isArray(days)) days = {};
   if (!validDraft(draft)) draft = days[todayISO] ? draftFromRecord(days[todayISO]) : newDraft(todayISO, settings, days);
+  else if (!days[draft.date] && isBlank(draft) && !settings.shifts.some((s) => s.name === draft.shiftName)) {
+    // графік змінився, а в порожній чернетці лишилась стара зміна
+    const s = mainShift(settings);
+    draft = { ...draft, shiftName: s.name, start: s.start, end: s.end, brk: s.brk };
+  }
   if (migrated) {
     saveSettings(settings);
     saveDraft(draft);

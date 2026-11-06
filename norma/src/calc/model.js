@@ -10,12 +10,11 @@ import { addDays, fmt, fmtMin, fromISO, monthRange, pad, plural, toISO, weekRang
 
 export { parseNum as num, shiftLength, toMinutes };
 
-export const DEFAULT_SHIFTS = [
-  { id: 's1', name: '1 зміна', start: '06:30', end: '14:30', brk: 60 },
-  { id: 's2', name: '2 зміна', start: '14:30', end: '22:30', brk: 60 },
-  { id: 's3', name: 'Перша подовжена', start: '06:30', end: '17:00', brk: 60 },
-  { id: 's4', name: 'Середня', start: '08:00', end: '17:00', brk: 60 },
-];
+// З листопада 2026 зміна одна для всіх: 6:30–19:30, перерва 1 год → 12 год роботи.
+export const DEFAULT_SHIFTS = [{ id: 's1', name: 'Основна зміна', start: '06:30', end: '19:30', brk: 60 }];
+
+// Версія налаштувань: до 3-ї в них лежали старі зміни (1 зміна, 2 зміна…) — їх замінює нова.
+const SETTINGS_V = 3;
 
 export const DEFAULT_DOWN = [
   'Немає матеріалу',
@@ -42,7 +41,7 @@ export const OTHER_MINUTES = [15, 30, 45, 60, 90, 120, 180, 240];
 export const WORKDAYS = [1, 2, 3, 4, 5]; // пн–пт, як у Date.getDay()
 
 export const DEFAULT_SETTINGS = {
-  v: 2,
+  v: SETTINGS_V,
   base: 420,
   goal: 100,
   monthGoal: null, // загальна мета на місяць (null — як особиста мета)
@@ -81,14 +80,15 @@ export function normalizeSettings(s) {
   for (const [m, v] of Object.entries(s?.monthGoals && typeof s.monthGoals === 'object' ? s.monthGoals : {}))
     if (/^\d{4}-\d{2}$/.test(m) && pctOf(v) != null) monthGoals[m] = pctOf(v);
   const workdays = Array.isArray(s?.workdays) ? [...new Set(s.workdays.map(Number).filter((x) => x >= 0 && x <= 6))].sort() : d.workdays;
+  const oldShifts = !(parseNum(s?.v) >= SETTINGS_V);
   return {
-    v: 2,
+    v: SETTINGS_V,
     base: base > 0 && base <= 1440 ? Math.round(base) : d.base,
     goal: goal >= 50 && goal <= 200 ? Math.round(goal) : d.goal,
     monthGoal: pctOf(s?.monthGoal),
     monthGoals,
     workdays: workdays.length ? workdays : d.workdays,
-    shifts: Array.isArray(s?.shifts)
+    shifts: Array.isArray(s?.shifts) && !oldShifts
       ? s.shifts
           .filter((x) => x && shiftLength(x.start, x.end) > 0)
           .map((x) => ({ id: x.id || newKey(), name: String(x.name || '').trim() || 'Зміна', start: x.start, end: x.end, brk: pos(x.brk) }))
