@@ -1,8 +1,8 @@
 // Сервіс-воркер: тримає копію самого застосунку (код, стилі, іконки, налаштування), щоб калькулятор
 // відкривався й без інтернету або коли мережа не пускає на сайт. Дані працівника тут не кешуються:
 // їх зберігає сам калькулятор на телефоні й дописує на сервер, щойно звʼязок зʼявиться.
-const CACHE = 'norma-b1d39ac812';
-const SHELL = ['./', './app.js?v=b1d39ac812', './app.css?v=b1d39ac812', './config.js?v=b1d39ac812', './manifest.webmanifest', './icons/icon.svg', './fonts/unbounded-cyrillic.woff2', './fonts/unbounded-latin.woff2'];
+const CACHE = 'norma-6910a32361';
+const SHELL = ['./', './app.js?v=6910a32361', './app.css?v=6910a32361', './config.js?v=6910a32361', './manifest.webmanifest', './icons/icon.svg', './fonts/unbounded-cyrillic.woff2', './fonts/unbounded-latin.woff2'];
 
 // На хостингу Firebase кожна наша відповідь має заголовок X-Norma (див. firebase.json). Відповідь без нього —
 // чужа сторінка (напр., «сайт заблоковано» від мережі), її не показуємо і не кешуємо, а відкриваємо копію.

@@ -408,6 +408,9 @@ export function Today() {
 
 // ---------- Результат ----------
 
+/** Неправдоподібний відсоток — коротко, в один рядок; повне пояснення — у підказці. */
+const ODD_SHORT = { down: 'Задовгий простій?', time: 'Замало часу?', qty: 'Зайва цифра?' };
+
 /** Відсоток, що робити далі, смуга до норми і темп — усе, заради чого відкривають калькулятор. */
 function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday, save, onHow, onCheck, pride }) {
   const has = res.hasInput && res.valid;
@@ -446,18 +449,18 @@ function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday,
         <Icon name={status.icon} size={18} />
         <span>{status.text}</span>
       </p>
-      {sub && <p class="r-sub">{sub}</p>}
+      {sub && !pride && <p class="r-sub">{sub}</p>}
       {!pride && <ProgressBar res={res} goal={goal} pace={pace} />}
       <PaceLine pace={pace} res={res} />
       {odd && (
-        <div class="r-odd">
-          <Icon name="info" size={17} />
-          <span>
-            <b>{fmt(res.pct, 0)}% — схоже на помилку.</b> {odd.text}.{' '}
-            <button class="link inline" onClick={onCheck}>
-              Перевірити
-            </button>
+        <div class="r-odd" title={odd.text}>
+          <Icon name="info" size={16} />
+          <span aria-label={`${fmt(res.pct, 0)}% — схоже на помилку. ${odd.text}`}>
+            <b>Помилка?</b> {ODD_SHORT[odd.why]}
           </span>
+          <button class="link inline" onClick={onCheck}>
+            Перевірити
+          </button>
         </div>
       )}
     </section>

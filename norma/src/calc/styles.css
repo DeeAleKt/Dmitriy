@@ -586,16 +586,22 @@ input::placeholder {
 }
 .r-odd {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  padding: 7px 12px;
+  border-radius: 14px;
   background: color-mix(in srgb, var(--p-bad) 22%, transparent);
   font-size: 13.5px;
-  line-height: 1.4;
+  line-height: 1.3;
+}
+.r-odd span {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .r-odd .ico {
-  margin-top: 1px;
   color: #ffb4b4;
 }
 .r-odd .link {
@@ -4233,6 +4239,8 @@ input::placeholder {
 /* ---------- Прайд-шкала: веселка-дуга з єдинорогом (Rainbow.jsx) ---------- */
 .result.with-rg {
   position: relative;
+  gap: 6px;
+  padding-top: 8px;
 }
 .r-corner {
   position: absolute;
@@ -4254,7 +4262,7 @@ input::placeholder {
 }
 .rg {
   position: relative;
-  margin: 4px -4px 0;
+  margin: 0 -4px;
 }
 .rg svg {
   display: block;
@@ -4283,9 +4291,9 @@ input::placeholder {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 5%;
+  bottom: 8%;
   justify-content: center;
-  font-size: clamp(30px, 9.6vw, 40px);
+  font-size: clamp(28px, 9vw, 36px);
 }
 .uni-white,
 .uni-leg rect {
@@ -4389,5 +4397,28 @@ input::placeholder {
   50% {
     opacity: 1;
     transform: scale(1.15);
+  }
+}
+
+/* низькі екрани (малі телефони, Safari з панелями): ущільнити верх, щоб головне лишалось на одному екрані */
+@media (max-height: 700px) {
+  .screen.today {
+    gap: 10px;
+  }
+  .screen.today .topbar {
+    min-height: 44px;
+  }
+  .screen.today .date-pill {
+    height: 44px;
+  }
+  .screen.today .round-btn {
+    width: 40px;
+    height: 40px;
+  }
+  :root[data-pride] .app::before {
+    height: 8px;
+  }
+  .main {
+    padding-top: 6px;
   }
 }

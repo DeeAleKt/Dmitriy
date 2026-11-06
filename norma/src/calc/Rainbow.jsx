@@ -1,38 +1,46 @@
-// Шкала прайд-режиму: веселка-дуга з хмарками на кінцях, по якій біжить єдиноріг — від лівої хмарки (0)
+// Шкала прайд-режиму: пласка веселка-місток з хмарками на кінцях, по якій біжить єдиноріг — від лівої хмарки (0)
 // до правої (мета). Біла зірочка — де за графіком маєте бути зараз. Розрахунок той самий, це лише вигляд.
 import { pctText } from './model.js';
 import { useTween } from './ui.jsx';
 
 const CX = 160;
-const CY = 146;
-const R = 148; // зовнішній край веселки
-const BAND = 8;
+const SPAN = 100; // градусів дуги: плаский місток замість півкола — шкала вдвічі нижча
+const A0 = 90 + SPAN / 2; // кут лівої хмарки
+const BAND = 6;
 const COLORS = ['#ff3b3b', '#ff9500', '#ffd60a', '#34c759', '#2f80ff', '#a24dff'];
+const MID = 170; // радіус середини веселки
+const R = MID + (BAND * COLORS.length) / 2; // зовнішній край
+const CY = R; // центр кола — так, щоб верх зовнішньої дуги був на y = 0
 const RADII = COLORS.map((_, i) => R - BAND / 2 - i * BAND);
-const FOOT = R - (BAND * COLORS.length) / 2; // середина веселки — там стоять хмарки
 
-const arc = (r) => `M ${CX - r} ${CY} A ${r} ${r} 0 0 1 ${CX + r} ${CY}`;
+const rad = (deg) => (deg * Math.PI) / 180;
 /** Точка на дузі: t від 0 (ліва хмарка) до 1 (права). */
 const at = (t, r) => {
-  const a = Math.PI * (1 - t);
+  const a = rad(A0 - SPAN * t);
   return [CX + r * Math.cos(a), CY - r * Math.sin(a)];
 };
+const arc = (r) => {
+  const [x1, y1] = at(0, r);
+  const [x2, y2] = at(1, r);
+  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+};
+const [FX, FY] = at(0, MID); // ліва хмарка (права — дзеркально)
 const ease = (k) => k * k * (3 - 2 * k);
 const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
 const EDGE = 0.14; // на цій частині дуги єдиноріг злітає з хмарки / сідає на хмарку
-const CLOUD_TOP = CY - 14;
+const CLOUD_TOP = FY - 17;
 
 /** Де стоїть єдиноріг і як нахилений: на хмарці — рівно, над дугою — уздовж неї. */
 function unicornAt(t) {
-  const fly = (x) => at(x, R + 4);
-  const tiltAt = (x) => (x - 0.5) * 70;
+  const fly = (x) => at(x, R + 3);
+  const tiltAt = (x) => (x - 0.5) * SPAN * 0.7;
   if (t < EDGE) {
     const k = ease(t / EDGE);
-    return { p: mix([CX - FOOT, CLOUD_TOP], fly(EDGE), k), tilt: tiltAt(EDGE) * k };
+    return { p: mix([FX, CLOUD_TOP], fly(EDGE), k), tilt: tiltAt(EDGE) * k };
   }
   if (t > 1 - EDGE) {
     const k = ease((t - (1 - EDGE)) / EDGE);
-    return { p: mix(fly(1 - EDGE), [CX + FOOT, CLOUD_TOP], k), tilt: tiltAt(1 - EDGE) * (1 - k) };
+    return { p: mix(fly(1 - EDGE), [2 * CX - FX, CLOUD_TOP], k), tilt: tiltAt(1 - EDGE) * (1 - k) };
   }
   return { p: fly(t), tilt: tiltAt(t) };
 }
@@ -45,7 +53,7 @@ export function RainbowGauge({ pct, goal, has, pace, approx, onHow, disabled }) 
   const star = pace?.state === 'live' ? at(Math.min(1, pace.frac), R + 9) : null;
   return (
     <div class={`rg ${has ? 'go' : 'idle'} ${over ? 'over' : ''}`}>
-      <svg viewBox="0 -52 320 218" aria-hidden="true">
+      <svg viewBox="0 -40 320 144" aria-hidden="true">
         <defs>
           <linearGradient id="rg-horn" x1="0" y1="1" x2="1" y2="0">
             <stop offset="0" stop-color="#f59e0b" />
@@ -60,10 +68,10 @@ export function RainbowGauge({ pct, goal, has, pace, approx, onHow, disabled }) 
             <path class="rg-fill" d={arc(RADII[i])} stroke={c} pathLength="100" stroke-dasharray="100 100" stroke-dashoffset={100 - t * 100} />
           ))}
         </g>
-        <Cloud x={CX - FOOT} />
-        <Cloud x={CX + FOOT} />
+        <Cloud x={FX} />
+        <Cloud x={2 * CX - FX} />
         {star && <Star x={star[0]} y={star[1]} />}
-        <g transform={`translate(${p[0].toFixed(2)} ${p[1].toFixed(2)}) rotate(${tilt.toFixed(1)}) scale(1.35)`}>
+        <g transform={`translate(${p[0].toFixed(2)} ${p[1].toFixed(2)}) rotate(${tilt.toFixed(1)}) scale(1.1)`}>
           <Unicorn />
         </g>
       </svg>
@@ -78,11 +86,11 @@ export function RainbowGauge({ pct, goal, has, pace, approx, onHow, disabled }) 
 
 function Cloud({ x }) {
   return (
-    <g class="rg-cloud" transform={`translate(${x} ${CY + 4})`}>
-      <ellipse cx="0" cy="6" rx="30" ry="9" />
-      <circle cx="-15" cy="1" r="10" />
-      <circle cx="1" cy="-5" r="13" />
-      <circle cx="16" cy="1" r="10" />
+    <g class="rg-cloud" transform={`translate(${x.toFixed(2)} ${FY + 3})`}>
+      <ellipse cx="0" cy="8" rx="29" ry="9" />
+      <circle cx="-14" cy="3" r="11" />
+      <circle cx="1" cy="-4" r="14" />
+      <circle cx="15" cy="3" r="11" />
     </g>
   );
 }
