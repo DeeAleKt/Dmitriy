@@ -3899,6 +3899,11 @@ input::placeholder {
   /* та сама веселка двічі — щоб анімація зсуву йшла без шва */
   --rainbow-loop: linear-gradient(90deg, #ff4d6d, #ff9f1c, #ffd60a, #2ec27e, #3a86ff, #a855f7, #ff4d6d, #ff9f1c, #ffd60a, #2ec27e, #3a86ff, #a855f7, #ff4d6d);
   --pastel: linear-gradient(90deg, #ffc2d6, #ffe1b3, #fff3b0, #c7f5d3, #c4dcff, #e2ccff);
+  /* веселка для тексту й кнопок з білим текстом — темніша, щоб читалась на світлому */
+  --rainbow-ink: linear-gradient(90deg, #e11d48, #ea580c 20%, #ca8a04 40%, #16a34a 60%, #2563eb 80%, #9333ea);
+  --rainbow-ring: conic-gradient(from 0deg, #ff4d6d, #ff9f1c, #ffd60a, #2ec27e, #3a86ff, #a855f7, #ff4d6d);
+  --flag: linear-gradient(180deg, #e40303 0 16.67%, #ff8c00 0 33.33%, #ffed00 0 50%, #008026 0 66.67%, #004dff 0 83.33%, #750787 0);
+  --blob: 0.17;
   --pride-ink: #6b21a8;
   --chip-a: linear-gradient(135deg, #ffe0f0, #efe3ff);
   --chip-b: linear-gradient(135deg, #ffe8cc, #fff3bf);
@@ -3921,6 +3926,8 @@ input::placeholder {
     --chip-c: linear-gradient(135deg, #0f3a2a, #102e4a);
     --ico-bg: linear-gradient(135deg, #4a1d3f, #2e1a52);
     --ico-ink: #f9a8d4;
+    --rainbow-ink: linear-gradient(90deg, #ff7a9a, #ffa94d 20%, #ffe066 40%, #69db9a 60%, #74a9ff 80%, #c99bff);
+    --blob: 0.22;
   }
 }
 :root[data-pride][data-theme='dark'] {
@@ -3937,24 +3944,39 @@ input::placeholder {
   --chip-c: linear-gradient(135deg, #0f3a2a, #102e4a);
   --ico-bg: linear-gradient(135deg, #4a1d3f, #2e1a52);
   --ico-ink: #f9a8d4;
+  --rainbow-ink: linear-gradient(90deg, #ff7a9a, #ffa94d 20%, #ffe066 40%, #69db9a 60%, #74a9ff 80%, #c99bff);
+  --blob: 0.22;
 }
 
-/* небо з веселковим сяйвом і стрічка прапора згори */
+/* небо: веселкові плями по всьому екрану (фіксований шар — працює й на iPhone) і прапор згори */
 :root[data-pride] body {
+  background: var(--bg);
+}
+:root[data-pride] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--blob);
   background:
-    radial-gradient(90% 50% at 0% 0%, rgba(255, 77, 109, 0.14), transparent 62%),
-    radial-gradient(80% 45% at 100% 2%, rgba(58, 134, 255, 0.14), transparent 62%),
-    radial-gradient(70% 40% at 55% 0%, rgba(255, 214, 10, 0.1), transparent 66%),
-    var(--bg);
-  background-repeat: no-repeat;
+    radial-gradient(45% 30% at 0% 0%, #ff4d6d, transparent 70%),
+    radial-gradient(45% 30% at 100% 8%, #ff9f1c, transparent 70%),
+    radial-gradient(40% 28% at 0% 45%, #ffd60a, transparent 70%),
+    radial-gradient(40% 28% at 100% 55%, #2ec27e, transparent 70%),
+    radial-gradient(45% 30% at 5% 95%, #3a86ff, transparent 70%),
+    radial-gradient(45% 30% at 100% 100%, #a855f7, transparent 70%);
 }
 :root[data-pride] .app::before {
   content: '';
   display: block;
-  height: 5px;
-  margin: 0 max(16px, env(safe-area-inset-left, 0px));
-  border-radius: 0 0 5px 5px;
-  background: var(--rainbow);
+  height: 12px;
+  border-radius: 0 0 10px 10px;
+  background: var(--flag);
+  box-shadow: 0 6px 18px -8px rgba(168, 85, 247, 0.6);
+}
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /* шрифт для цифр і заголовків */
@@ -3980,29 +4002,34 @@ input::placeholder {
 /* картка результату: веселкова рамка, що повільно пливе, і неонове сяйво */
 :root[data-pride] .result {
   border: 2px solid transparent;
+  border-width: 3px;
   background:
     radial-gradient(110% 120% at 0% 0%, color-mix(in srgb, var(--lv) 26%, transparent), transparent 62%) padding-box,
+    radial-gradient(60% 70% at 100% 0%, rgba(58, 134, 255, 0.22), transparent 70%) padding-box,
+    radial-gradient(60% 60% at 100% 100%, rgba(255, 214, 10, 0.12), transparent 70%) padding-box,
+    radial-gradient(55% 60% at 0% 100%, rgba(46, 194, 126, 0.16), transparent 70%) padding-box,
     linear-gradient(160deg, var(--p-1), var(--p-2)) padding-box,
     var(--rainbow-loop) border-box;
-  background-size: auto, auto, 200% 100%;
-  animation: pride-flow 12s linear infinite;
+  background-size: auto, auto, auto, auto, auto, 200% 100%;
+  animation: pride-flow 10s linear infinite;
   box-shadow: 0 20px 40px -22px rgba(168, 85, 247, 0.75), 0 10px 26px -18px rgba(255, 77, 109, 0.6);
 }
 @keyframes pride-flow {
   from {
-    background-position: 0 0, 0 0, 0% 0;
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0% 0;
   }
   to {
-    background-position: 0 0, 0 0, 100% 0;
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 100% 0;
   }
 }
 :root[data-pride] .r-num,
 :root[data-pride] .r-num:disabled,
 :root[data-pride] .r-mini b {
-  background: linear-gradient(90deg, #ffb3c6, #ffd6a5 22%, #fdffb6 42%, #caffbf 60%, #9bf6ff 78%, #e0c3fc);
+  background: linear-gradient(90deg, #ffb3c6, #ffd6a5, #fdffb6, #caffbf, #9bf6ff, #e0c3fc, #ffb3c6, #ffd6a5, #fdffb6, #caffbf, #9bf6ff, #e0c3fc, #ffb3c6) 0 0 / 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  animation: pride-slide 8s linear infinite;
 }
 :root[data-pride] .r-num {
   font-size: clamp(36px, 11vw, 46px);
@@ -4015,8 +4042,16 @@ input::placeholder {
 :root[data-pride] .result .savechip:not(.warn) span {
   display: none;
 }
-:root[data-pride] .r-bar i,
+:root[data-pride] .r-bar {
+  height: 12px;
+}
 :root[data-pride] .r-mini > i {
+  height: 4px;
+}
+:root[data-pride] .r-bar i,
+:root[data-pride] .r-mini > i,
+:root[data-pride] .mbar-fill,
+:root[data-pride] .sum-bar i {
   background: var(--rainbow-loop);
   background-size: 200% 100%;
   animation: pride-slide 5s linear infinite;
@@ -4038,17 +4073,6 @@ input::placeholder {
 }
 
 /* картки: веселкова стрічка згори, шрифт, іконки */
-:root[data-pride] .pitem {
-  position: relative;
-  overflow: hidden;
-}
-:root[data-pride] .pitem::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 4px;
-  background: var(--rainbow);
-}
 :root[data-pride] .head-ico {
   background: var(--ico-bg);
   color: var(--ico-ink);
@@ -4060,24 +4084,28 @@ input::placeholder {
 
 /* кнопки: «додати» — пастельні градієнти, головні — рожево-фіолетові */
 :root[data-pride] .add-chip {
-  background: var(--chip-a);
-  color: var(--accent);
+  background: linear-gradient(135deg, #ff4d6d, #ff9f1c);
+  color: #fff;
+  box-shadow: 0 8px 18px -12px #ff4d6d;
 }
 :root[data-pride] .add-chip.down {
-  background: var(--chip-b);
-  color: var(--warn);
+  background: linear-gradient(135deg, #ffd60a, #2ec27e);
+  color: #1d2a05;
+  box-shadow: 0 8px 18px -12px #2ec27e;
 }
 :root[data-pride] .add-chip.other {
-  background: var(--chip-c);
-  color: var(--teal);
+  background: linear-gradient(135deg, #3a86ff, #a855f7);
+  color: #fff;
+  box-shadow: 0 8px 18px -12px #a855f7;
 }
 :root[data-pride] .btn.primary {
-  background: linear-gradient(135deg, #ff4d8d, #a855f7);
+  background: linear-gradient(90deg, #e11d48, #ea580c 20%, #ca8a04 40%, #16a34a 60%, #2563eb 80%, #9333ea);
   color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   box-shadow: 0 10px 22px -12px rgba(168, 85, 247, 0.9);
 }
 :root[data-pride] .toggle input:checked + i {
-  background: linear-gradient(90deg, #ff4d8d, #a855f7);
+  background: var(--rainbow);
 }
 :root[data-pride] .seg button.on {
   color: var(--accent);
@@ -4088,9 +4116,20 @@ input::placeholder {
   color: var(--accent);
 }
 :root[data-pride] .tabbar button.on .tab-ico {
-  background: var(--pastel);
+  border: 2px solid transparent;
+  background: var(--pastel) padding-box, var(--rainbow) border-box;
   color: #4c1d95;
   box-shadow: 0 6px 16px -8px rgba(168, 85, 247, 0.8);
+}
+:root[data-pride] .tabbar {
+  border-top: 0;
+}
+:root[data-pride] .tabbar::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--rainbow);
 }
 
 /* шторки й вхід */
@@ -4099,14 +4138,94 @@ input::placeholder {
   background: var(--rainbow);
 }
 :root[data-pride] .auth-brand h1 {
-  background: var(--rainbow);
+  background: var(--rainbow-ink);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 :root[data-pride] .toast {
-  border: 2px solid transparent;
+  border: 3px solid transparent;
   background:
     linear-gradient(var(--text), var(--text)) padding-box,
     var(--rainbow) border-box;
+}
+
+/* ---------- Ще більше веселки ---------- */
+/* веселкові рамки на всіх картках, рядку зміни, виробах і даті */
+:root[data-pride] :is(.card, .shift-row, .pitem, .date-pill, .tile) {
+  border: 2px solid transparent;
+  background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--rainbow) border-box;
+  box-shadow: 0 12px 26px -20px rgba(168, 85, 247, 0.55);
+}
+:root[data-pride] .shift-row:active {
+  background: linear-gradient(var(--surface-2), var(--surface-2)) padding-box, var(--rainbow) border-box;
+}
+:root[data-pride] .banner {
+  border: 2px solid transparent;
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)) padding-box, var(--rainbow) border-box;
+}
+/* круглі кнопки — веселкове кільце */
+:root[data-pride] .round-btn {
+  border: 2px solid transparent;
+  background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--rainbow-ring) border-box;
+}
+/* заголовки — веселковим текстом */
+:root[data-pride] :is(.title, .date-main, .card-head h3, .sheet-head h2, .sgroup h3) {
+  background: var(--rainbow-ink);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root[data-pride] .title {
+  flex: 0 1 auto;
+  margin-right: auto;
+}
+:root[data-pride] :is(.sheet-head h2, .sgroup h3) {
+  width: fit-content;
+}
+/* шторки — веселковий край згори */
+:root[data-pride] .sheet {
+  border-top: 4px solid transparent;
+  background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--rainbow) border-box;
+}
+/* поля вводу: веселкова рамка під час введення, «+» — веселковий */
+:root[data-pride] :is(.numbox:focus-within, .step-input:focus, .input:focus, .hm-box:focus-within) {
+  border-color: transparent;
+  background: linear-gradient(var(--surface-2), var(--surface-2)) padding-box, var(--rainbow) border-box;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #ec4899 22%, transparent);
+}
+:root[data-pride] .stepper .step-btn:last-child {
+  border-color: transparent;
+  background: var(--rainbow-ink);
+  color: #fff;
+}
+:root[data-pride] .seg button {
+  border: 2px solid transparent;
+}
+:root[data-pride] .seg button.on {
+  background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--rainbow) border-box;
+}
+:root[data-pride] :is(.mchip.on, .rchip.on, .qchip:active) {
+  border-color: transparent;
+  background: var(--rainbow-ink);
+  color: #fff;
+}
+/* рядки історії — по черзі кольорами прапора */
+:root[data-pride] .hrow {
+  box-shadow: inset 5px 0 0 var(--c, #e40303);
+}
+:root[data-pride] .hrow:nth-child(6n + 2) {
+  --c: #ff8c00;
+}
+:root[data-pride] .hrow:nth-child(6n + 3) {
+  --c: #ffcc00;
+}
+:root[data-pride] .hrow:nth-child(6n + 4) {
+  --c: #008026;
+}
+:root[data-pride] .hrow:nth-child(6n + 5) {
+  --c: #004dff;
+}
+:root[data-pride] .hrow:nth-child(6n) {
+  --c: #750787;
 }
