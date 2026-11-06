@@ -3883,7 +3883,7 @@ input::placeholder {
 /* ==========================================================================
    Прайд-режим (налаштування «Прайд-режим», атрибут data-pride на <html>).
    Веселка з прапора, блиск і шрифт Unbounded для цифр і заголовків. Розрахунок і розмітка ті самі —
-   змінюються лише кольори, шрифт і жарти (vibe.js). Анімації вимикає prefers-reduced-motion вище.
+   змінюються лише кольори й шрифт. Анімації вимикає prefers-reduced-motion вище.
    ========================================================================== */
 :root[data-pride] {
   --bg: #fbf6ff;
@@ -4035,46 +4035,6 @@ input::placeholder {
 }
 :root[data-pride] .r-mini b {
   font-size: 18px;
-}
-
-/* жарт дня — під картою результату, торкнись — наступний */
-.r-quip {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  margin-top: 2px;
-  padding: 9px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(244, 246, 251, 0.94);
-  font-size: 13.5px;
-  font-weight: 600;
-  line-height: 1.38;
-  text-align: left;
-  transition: transform 0.12s, background 0.2s;
-}
-.r-quip:active {
-  transform: scale(0.98);
-  background: rgba(255, 255, 255, 0.12);
-}
-.r-quip b {
-  flex: none;
-  font-size: 15px;
-  line-height: 1.25;
-}
-.r-quip span {
-  min-width: 0;
-}
-.r-quip.pop span {
-  animation: quip-pop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.4);
-}
-@keyframes quip-pop {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.96);
-  }
 }
 
 /* картки: веселкова стрічка згори, шрифт, іконки */

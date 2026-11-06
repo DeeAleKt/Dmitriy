@@ -55,7 +55,7 @@ export const DEFAULT_SETTINGS = {
   otherKinds: DEFAULT_OTHER,
   theme: 'auto',
   celebrate: true,
-  pride: true, // веселка, блиск і жарти (vibe.js); розрахунок від цього не залежить
+  pride: true, // веселковий вигляд (styles.css, data-pride); розрахунок від цього не залежить
 };
 
 let seq = 0;

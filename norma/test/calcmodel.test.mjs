@@ -208,6 +208,12 @@ test('ціль на зміну видно одразу після норми: ш
   assert.equal(wholePieces(20.75), 21);
 });
 
+test('прайд-режим: увімкнений за замовчуванням і вимикається', () => {
+  assert.equal(normalizeSettings(null).pride, true);
+  assert.equal(normalizeSettings({ pride: false }).pride, false);
+  assert.equal(normalizeSettings({ pride: 'так' }).pride, true);
+});
+
 test('ціль у штуках для кожного виробу: решта зміни — лише на нього', () => {
   const shift = { start: '06:30', end: '19:30', brk: 75 }; // 705 хв
   // один виріб: ціль = норма на день, і не змінюється від уже зробленого

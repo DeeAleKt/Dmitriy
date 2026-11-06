@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { addDays, fmt, fmtHM, fmtMin, fmtTime, fromISO, pad, plural, store, today } from '../util.js';
 import { useApp, useNow } from './ctx.js';
 import { backup, BACKUP_KEY } from './files.js';
-import { buzz, confetti } from './fx.js';
+import { buzz, confetti, PRIDE_COLORS } from './fx.js';
 import { MonthCard, MonthGoalSheet } from './Month.jsx';
 import { NormFixSheet } from './Norms.jsx';
 import {
@@ -32,7 +32,6 @@ import {
   wholePieces,
 } from './model.js';
 import { ask, CardHead, cleanNum, Icon, Sheet, Stepper, toast, Toggle, useTween } from './ui.jsx';
-import { CHEERS, moodOf, PRIDE_COLORS, quip } from './vibe.js';
 
 const WEEKDAYS = ['неділя', 'понеділок', 'вівторок', 'середа', 'четвер', 'пʼятниця', 'субота'];
 const MONTHS_GEN = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
@@ -125,10 +124,6 @@ export function Today() {
   const approx = isApprox(record);
   const pride = settings.pride;
   const [sheet, setSheet] = useState(null);
-  // залицяння під відсотком (vibe.js): те саме, поки не змінився стан дня; саме — раз на 10 хв або дотиком
-  const [spin, setSpin] = useState(0);
-  const mood = moodOf(res, lv, { odd, after: isToday && pace?.state === 'after' });
-  const joke = pride ? quip(mood, `${draft.date}|${Math.floor(now / 6e5)}|${spin}`) : null;
   const title = dateTitle(draft.date);
 
   // Свято, коли під час введення перетнули мету чи свій рекорд (раз на день)
@@ -143,16 +138,14 @@ export function Today() {
     const key = draft.date;
     if (best && was.pct <= best.pct && res.pct > best.pct + 0.05 && !fired.current.has(`${key}:best`)) {
       fired.current.add(`${key}:best`).add(`${key}:goal`);
-      toast(pride ? CHEERS.record(fmt(res.pct, 1)) : `Новий особистий рекорд — ${fmt(res.pct, 1)}%!`, 'ok', 'trophy');
+      toast(`Новий особистий рекорд — ${fmt(res.pct, 1)}%!`, 'ok', 'trophy');
       if (settings.celebrate) confetti({ y: 0.22, count: 170, colors: pride ? PRIDE_COLORS : undefined });
       buzz(30);
     } else if (was.pct < goal - 0.05 && res.pct >= goal - 0.05 && !fired.current.has(`${key}:goal`)) {
       fired.current.add(`${key}:goal`);
       const run = streak({ ...others, [key]: record }, goal).cur;
       const done = goal === 100 ? 'Норму виконано' : `Мету ${goal}% досягнуто`;
-      const days = `${run} ${plural(run, ['день', 'дні', 'днів'])}`;
-      const plain = run >= 2 ? `${done} · ${days} поспіль` : `${done}!`;
-      toast(pride ? (run >= 2 ? CHEERS.streak(days) : goal === 100 ? CHEERS.goal : plain) : plain, 'ok', run >= 2 ? 'flame' : 'sparkle');
+      toast(run >= 2 ? `${done} · ${run} ${plural(run, ['день', 'дні', 'днів'])} поспіль` : `${done}!`, 'ok', run >= 2 ? 'flame' : 'sparkle');
       if (settings.celebrate) confetti({ y: 0.22, count: 110, colors: pride ? PRIDE_COLORS : undefined });
       buzz(25);
     }
@@ -260,8 +253,6 @@ export function Today() {
         save={blank && !saved ? null : <SaveChip sync={sync} dirty={dirty} invalid={!blank && !res.valid} onClick={() => setSheet({ type: 'sync' })} />}
         onHow={() => setSheet({ type: 'how' })}
         onCheck={checkOdd}
-        joke={joke}
-        onJoke={() => setSpin((x) => x + 1)}
       />
       <MiniBar show={mini} res={res} goal={goal} lv={lv} status={status} approx={approx} />
 
@@ -416,7 +407,7 @@ export function Today() {
 // ---------- Результат ----------
 
 /** Відсоток, що робити далі, смуга до норми і темп — усе, заради чого відкривають калькулятор. */
-function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday, save, onHow, onCheck, joke, onJoke }) {
+function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday, save, onHow, onCheck }) {
   const has = res.hasInput && res.valid;
   const shown = useTween(has ? res.pct : 0);
   const single = res.valid && res.active.length === 1 && res.otherMin === 0 ? res.active[0] : null;
@@ -456,27 +447,7 @@ function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday,
           </span>
         </div>
       )}
-      {joke && <Joke text={joke} onNext={onJoke} />}
     </section>
-  );
-}
-
-/** Жарт дня в прайд-режимі; дотик — наступний (з маленьким підстрибуванням). */
-function Joke({ text, onNext }) {
-  const [pop, setPop] = useState(false);
-  return (
-    <button
-      class={`r-quip ${pop ? 'pop' : ''}`}
-      aria-label={`${text}. Наступний жарт`}
-      onClick={() => {
-        setPop(false);
-        requestAnimationFrame(() => setPop(true));
-        onNext();
-      }}
-    >
-      <b aria-hidden="true">💬</b>
-      <span key={text}>{text}</span>
-    </button>
   );
 }
 

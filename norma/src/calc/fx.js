@@ -1,6 +1,8 @@
 // Конфеті на честь виконаної норми. Легке полотно поверх сторінки, саме прибирається.
 
 const COLORS = ['#6366f1', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#eab308', '#ec4899'];
+/** Прайд-режим: кольори прапора Progress Pride (з трансгендерними й міжрасовими смугами). */
+export const PRIDE_COLORS = ['#e40303', '#ff8c00', '#ffed00', '#008026', '#004dff', '#750787', '#5bcefa', '#f5a9b8', '#ffffff', '#784f17'];
 
 export function confetti({ x = 0.5, y = 0.3, count = 140, colors = COLORS } = {}) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
