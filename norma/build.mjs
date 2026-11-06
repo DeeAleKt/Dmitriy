@@ -44,6 +44,9 @@ function copyShell(result) {
   }
   copyFileSync(join(pub, 'manifest.webmanifest'), join(out, 'manifest.webmanifest'));
   for (const f of readdirSync(join(pub, 'icons'))) copyFileSync(join(pub, 'icons', f), join(out, 'icons', f));
+  // шрифт заголовків і цифр (Unbounded, OFL) — лежить поруч, щоб працював і без інтернету
+  mkdirSync(join(out, 'fonts'), { recursive: true });
+  for (const f of readdirSync(join(pub, 'fonts'))) copyFileSync(join(pub, 'fonts', f), join(out, 'fonts', f));
   // config.js власник заповнює прямо в docs/ — не перезаписуємо вже заповнений
   const cfg = join(out, 'config.js');
   if (!existsSync(cfg) || readFileSync(cfg, 'utf8').includes('ВСТАВТЕ_СЮДИ')) copyFileSync(join(pub, 'config.js'), cfg);

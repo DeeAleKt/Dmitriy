@@ -32,6 +32,7 @@ import {
   wholePieces,
 } from './model.js';
 import { ask, CardHead, cleanNum, Icon, Sheet, Stepper, toast, Toggle, useTween } from './ui.jsx';
+import { moodOf, PRIDE_COLORS, quip, say } from './vibe.js';
 
 const WEEKDAYS = ['неділя', 'понеділок', 'вівторок', 'середа', 'четвер', 'пʼятниця', 'субота'];
 const MONTHS_GEN = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
@@ -98,7 +99,7 @@ function statusOf(res, goal, base) {
     let extra = 0;
     if (g.single && res.otherMin === 0) extra = g.single.qty - (g.single.dayNorm * goal) / 100;
     if (goal !== 100) return { icon: 'sparkle', done: true, text: `Мету ${goal}% досягнуто` };
-    return { icon: 'sparkle', done: true, text: extra >= 0.05 ? `Норму виконано · +${fmt(extra)} шт понад` : 'Норму виконано' };
+    return { icon: 'sparkle', done: true, text: extra >= 0.05 ? `Норму виконано · +${fmt(extra)} шт` : 'Норму виконано' };
   }
   if (g.pieces != null) return { icon: 'target', text: `До ${word} ще ${wholePieces(g.pieces)} шт` };
   return { icon: 'target', text: `До ${word} ще ${fmtMin(g.minutes)} роботи` };
@@ -122,7 +123,12 @@ export function Today() {
   const status = statusOf(res, goal, base);
   const odd = oddDay(res);
   const approx = isApprox(record);
+  const pride = settings.pride;
   const [sheet, setSheet] = useState(null);
+  // жарт дня: той самий, поки не змінився стан; сам — раз на 10 хв, або дотиком
+  const [spin, setSpin] = useState(0);
+  const mood = moodOf(res, lv, { odd, after: isToday && pace?.state === 'after' });
+  const joke = pride ? quip(mood, `${draft.date}|${Math.floor(now / 6e5)}|${spin}`) : null;
   const title = dateTitle(draft.date);
 
   // Свято, коли під час введення перетнули мету чи свій рекорд (раз на день)
@@ -137,15 +143,17 @@ export function Today() {
     const key = draft.date;
     if (best && was.pct <= best.pct && res.pct > best.pct + 0.05 && !fired.current.has(`${key}:best`)) {
       fired.current.add(`${key}:best`).add(`${key}:goal`);
-      toast(`Новий особистий рекорд — ${fmt(res.pct, 1)}%!`, 'ok', 'trophy');
-      if (settings.celebrate) confetti({ y: 0.22, count: 170 });
+      toast(say(pride, `Новий особистий рекорд — ${fmt(res.pct, 1)}%!`, `Рекорд — ${fmt(res.pct, 1)}%! Мадонна нервово заздрить 💅`), 'ok', 'trophy');
+      if (settings.celebrate) confetti({ y: 0.22, count: 170, colors: pride ? PRIDE_COLORS : undefined });
       buzz(30);
     } else if (was.pct < goal - 0.05 && res.pct >= goal - 0.05 && !fired.current.has(`${key}:goal`)) {
       fired.current.add(`${key}:goal`);
       const run = streak({ ...others, [key]: record }, goal).cur;
       const done = goal === 100 ? 'Норму виконано' : `Мету ${goal}% досягнуто`;
-      toast(run >= 2 ? `${done} · ${run} ${plural(run, ['день', 'дні', 'днів'])} поспіль` : `${done}!`, 'ok', run >= 2 ? 'flame' : 'sparkle');
-      if (settings.celebrate) confetti({ y: 0.22, count: 110 });
+      const days = `${run} ${plural(run, ['день', 'дні', 'днів'])}`;
+      const text = run >= 2 ? say(pride, `${done} · ${days} поспіль`, `${days} поспіль з нормою — серіал, який не скасують 📺`) : say(pride, `${done}!`, `${done}! Ти — ікона 🏳️‍🌈`);
+      toast(text, 'ok', run >= 2 ? 'flame' : 'sparkle');
+      if (settings.celebrate) confetti({ y: 0.22, count: 110, colors: pride ? PRIDE_COLORS : undefined });
       buzz(25);
     }
   }, [res.pct, draft.date]);
@@ -196,7 +204,9 @@ export function Today() {
   async function clearDay() {
     const ok = await ask({
       title: 'Очистити розрахунок?',
-      text: saved ? 'Кількості, простій та інші роботи буде прибрано, а день зникне з історії та статистики.' : 'Кількості, простій та інші роботи буде прибрано.',
+      text:
+        (saved ? 'Кількості, простій та інші роботи буде прибрано, а день зникне з історії та статистики.' : 'Кількості, простій та інші роботи буде прибрано.') +
+        say(pride, '', ' Почнемо з чистого аркуша — як після розриву 💔'),
       ok: 'Очистити',
       danger: true,
     });
@@ -232,7 +242,7 @@ export function Today() {
       {!isToday && (
         <div class="banner">
           <Icon name="history" size={18} />
-          <span>{saved?.sample ? 'День із прикладу — змініть щось, і він стане вашим' : 'Минулий день · зберігається сам'}</span>
+          <span>{saved?.sample ? 'День із прикладу — змініть щось, і він стане вашим' : say(pride, 'Минулий день · зберігається сам', 'Минулий день — ностальгія з автозбереженням 💾')}</span>
           <button class="link" onClick={() => switchDate(today())}>
             До сьогодні
           </button>
@@ -252,6 +262,8 @@ export function Today() {
         save={blank && !saved ? null : <SaveChip sync={sync} dirty={dirty} invalid={!blank && !res.valid} onClick={() => setSheet({ type: 'sync' })} />}
         onHow={() => setSheet({ type: 'how' })}
         onCheck={checkOdd}
+        joke={joke}
+        onJoke={() => setSpin((x) => x + 1)}
       />
       <MiniBar show={mini} res={res} goal={goal} lv={lv} status={status} approx={approx} />
 
@@ -267,6 +279,7 @@ export function Today() {
             res={res}
             base={base}
             goal={goal}
+            pride={pride}
             onChange={(x) => setProduct(p.key, x)}
             onRemove={() => removeProduct(p)}
             onPick={() => setSheet({ type: 'product', key: p.key })}
@@ -330,6 +343,7 @@ export function Today() {
       <p class="privacy">
         <Icon name="shield" size={16} />
         <span>
+          {say(pride, '', 'Що було на зміні — лишається на зміні 🤫 ')}
           {privacyText(sync)}
           {signIn && (
             <>
@@ -406,7 +420,7 @@ export function Today() {
 // ---------- Результат ----------
 
 /** Відсоток, що робити далі, смуга до норми і темп — усе, заради чого відкривають калькулятор. */
-function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday, save, onHow, onCheck }) {
+function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday, save, onHow, onCheck, joke, onJoke }) {
   const has = res.hasInput && res.valid;
   const shown = useTween(has ? res.pct : 0);
   const single = res.valid && res.active.length === 1 && res.otherMin === 0 ? res.active[0] : null;
@@ -446,7 +460,27 @@ function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday,
           </span>
         </div>
       )}
+      {joke && <Joke text={joke} onNext={onJoke} />}
     </section>
+  );
+}
+
+/** Жарт дня в прайд-режимі; дотик — наступний (з маленьким підстрибуванням). */
+function Joke({ text, onNext }) {
+  const [pop, setPop] = useState(false);
+  return (
+    <button
+      class={`r-quip ${pop ? 'pop' : ''}`}
+      aria-label={`${text}. Наступний жарт`}
+      onClick={() => {
+        setPop(false);
+        requestAnimationFrame(() => setPop(true));
+        onNext();
+      }}
+    >
+      <b aria-hidden="true">💬</b>
+      <span key={text}>{text}</span>
+    </button>
   );
 }
 
@@ -778,7 +812,7 @@ function DayContext({ days, date, record, res, goal, isToday }) {
 
 // ---------- Виріб ----------
 
-function ProductItem({ p, idx, line, res, base, goal, onChange, onRemove, onPick, onFix }) {
+function ProductItem({ p, idx, line, res, base, goal, pride, onChange, onRemove, onPick, onFix }) {
   const norm = num(p.norm);
   // кілька виробів (чи ще інші роботи) — частка кожного у відсотку дня; разом вони дають загальний відсоток
   const multi = res.active.length > 1 || res.otherMin > 0;
@@ -838,12 +872,12 @@ function ProductItem({ p, idx, line, res, base, goal, onChange, onRemove, onPick
             focusNorm();
           }}
         >
-          Норми ще немає?
+          {say(pride, 'Норми ще немає?', 'Норми ще немає? Ми теж не в нормі 💅')}
         </button>
       )}
       {p.approx && (
         <div class="approx-note">
-          <span>{norm > 0 ? 'Норма приблизна — відсоток орієнтовний' : 'Приблизна норма — потім уточните'}</span>
+          <span>{norm > 0 ? say(pride, 'Норма приблизна — відсоток орієнтовний', 'Норма «на око» — як і наші плани на вихідні 😉') : 'Приблизна норма — потім уточните'}</span>
           {norm > 0 ? (
             <button class="btn soft small" onClick={onFix}>
               Уточнити
@@ -926,7 +960,11 @@ function TimeSheet({ kind, item, draft, base, settings, setSettings, onSave, onD
   return (
     <Sheet
       title={down ? 'Простій' : 'Інша робота'}
-      sub={down ? 'Зменшує робочий час і норму на день' : 'Зараховується година в годину'}
+      sub={
+        down
+          ? say(settings.pride, 'Зменшує робочий час і норму на день', 'Навіть дивам треба пауза. Норма на день зменшиться ☕')
+          : say(settings.pride, 'Зараховується година в годину', 'Багатозадачність — наше друге імʼя. Година в годину 🔧')
+      }
       onClose={onClose}
       footer={
         <>
@@ -1035,7 +1073,7 @@ function ShiftSheet({ draft, res, settings, isToday, now, onApply, onClose }) {
   return (
     <Sheet
       title="Зміна"
-      sub="Вхід і вихід — фактичні, по прохідній"
+      sub={say(settings.pride, 'Вхід і вихід — фактичні, по прохідній', 'Вхід і вихід — фактичні. Запізнення не засуджуємо, але рахуємо 😌')}
       onClose={onClose}
       footer={
         <button class="btn primary block" onClick={onClose}>

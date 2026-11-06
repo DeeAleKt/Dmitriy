@@ -2,7 +2,7 @@
 // відкривався й без інтернету або коли мережа не пускає на сайт. Дані працівника тут не кешуються:
 // їх зберігає сам калькулятор на телефоні й дописує на сервер, щойно звʼязок зʼявиться.
 const CACHE = 'norma-__VERSION__';
-const SHELL = ['./', './app.js?v=__VERSION__', './app.css?v=__VERSION__', './config.js?v=__VERSION__', './manifest.webmanifest', './icons/icon.svg'];
+const SHELL = ['./', './app.js?v=__VERSION__', './app.css?v=__VERSION__', './config.js?v=__VERSION__', './manifest.webmanifest', './icons/icon.svg', './fonts/unbounded-cyrillic.woff2', './fonts/unbounded-latin.woff2'];
 
 // На хостингу Firebase кожна наша відповідь має заголовок X-Norma (див. firebase.json). Відповідь без нього —
 // чужа сторінка (напр., «сайт заблоковано» від мережі), її не показуємо і не кешуємо, а відкриваємо копію.

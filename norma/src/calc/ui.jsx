@@ -65,18 +65,39 @@ export function Icon({ name, size = 20, class: cls = '' }) {
   );
 }
 
+// Логотип — як іконка застосунку: веселкова дуга-манометр (24 відрізки від червоного до фіолетового) і галочка.
+const RAINBOW = ['#ff4d6d', '#ff9f1c', '#ffd60a', '#2ec27e', '#3a86ff', '#a855f7'].map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
+const LOGO_ARC = Array.from({ length: 24 }, (_, i, n = 24) => {
+  const at = (deg) => [32 + 17 * Math.cos((deg * Math.PI) / 180), 33 + 17 * Math.sin((deg * Math.PI) / 180)].map((v) => v.toFixed(2));
+  const [x1, y1] = at(-90 + (253 * i) / n);
+  const [x2, y2] = at(-90 + 253 * Math.min(1, (i + 1.15) / n));
+  const pos = ((i + 0.5) / n) * (RAINBOW.length - 1); // де на веселці цей відрізок
+  const j = Math.min(Math.floor(pos), RAINBOW.length - 2);
+  const rgb = RAINBOW[j].map((c, k) => Math.round(c + (RAINBOW[j + 1][k] - c) * (pos - j)));
+  return { d: `M${x1} ${y1}A17 17 0 0 1 ${x2} ${y2}`, c: `rgb(${rgb})`, cap: i === 0 || i === n - 1 };
+});
+
 export function Logo({ size = 30 }) {
   return (
     <svg class="logo" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
       <defs>
         <linearGradient id="lgc" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#6366f1" />
-          <stop offset="1" stop-color="#a855f7" />
+          <stop offset="0" stop-color="#3b1670" />
+          <stop offset="1" stop-color="#140a26" />
         </linearGradient>
+        <radialGradient id="lgh" cx=".15" cy=".05" r=".6">
+          <stop offset="0" stop-color="#ff4d8d" stop-opacity=".45" />
+          <stop offset="1" stop-color="#ff4d8d" stop-opacity="0" />
+        </radialGradient>
       </defs>
       <rect width="64" height="64" rx="16" fill="url(#lgc)" />
-      <circle cx="32" cy="33" r="17" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="6" />
-      <path d="M32 16a17 17 0 1 1-16.2 22" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" />
+      <rect width="64" height="64" rx="16" fill="url(#lgh)" />
+      <circle cx="32" cy="33" r="17" fill="none" stroke="rgba(255,255,255,.24)" stroke-width="6" />
+      <g fill="none" stroke-width="6">
+        {LOGO_ARC.map((s) => (
+          <path d={s.d} stroke={s.c} stroke-linecap={s.cap ? 'round' : 'butt'} />
+        ))}
+      </g>
       <path d="M25 33.5l5 5 9-10" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
   );

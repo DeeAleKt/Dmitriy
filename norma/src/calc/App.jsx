@@ -81,6 +81,8 @@ export function App({ backend }) {
     else if (hostTheme) root.setAttribute('data-theme', hostTheme);
     else root.removeAttribute('data-theme');
   }, [settings.theme]);
+  // прайд-режим: веселка, шрифт і жарти (vibe.js) — CSS перефарбовує все за атрибутом
+  useEffect(() => void document.documentElement.toggleAttribute('data-pride', settings.pride), [settings.pride]);
 
   // ---------- Запис в акаунт ----------
 

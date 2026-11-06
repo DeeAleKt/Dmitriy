@@ -2,7 +2,7 @@
 
 const COLORS = ['#6366f1', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#eab308', '#ec4899'];
 
-export function confetti({ x = 0.5, y = 0.3, count = 140 } = {}) {
+export function confetti({ x = 0.5, y = 0.3, count = 140, colors = COLORS } = {}) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const c = document.createElement('canvas');
   c.className = 'confetti';
@@ -28,7 +28,7 @@ export function confetti({ x = 0.5, y = 0.3, count = 140 } = {}) {
       r: Math.random() * Math.PI,
       vr: (Math.random() - 0.5) * 0.35,
       s: 5 + Math.random() * 6,
-      c: COLORS[(Math.random() * COLORS.length) | 0],
+      c: colors[(Math.random() * colors.length) | 0],
       round: Math.random() < 0.3,
     };
   });

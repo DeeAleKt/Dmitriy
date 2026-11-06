@@ -55,6 +55,7 @@ export const DEFAULT_SETTINGS = {
   otherKinds: DEFAULT_OTHER,
   theme: 'auto',
   celebrate: true,
+  pride: true, // веселка, блиск і жарти (vibe.js); розрахунок від цього не залежить
 };
 
 let seq = 0;
@@ -108,6 +109,7 @@ export function normalizeSettings(s) {
     otherKinds: list(s?.otherKinds, d.otherKinds),
     theme: ['light', 'dark'].includes(s?.theme) ? s.theme : 'auto',
     celebrate: s?.celebrate !== false,
+    pride: s?.pride !== false,
   };
 }
 
