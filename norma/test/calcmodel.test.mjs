@@ -15,6 +15,7 @@ import {
   streak,
   summarize,
   toGoal,
+  piecesToGoal,
   toRecord,
   wholePieces,
 } from '../src/calc/model.js';
@@ -205,6 +206,25 @@ test('ціль на зміну видно одразу після норми: ш
   assert.equal(wholePieces(60), 60);
   assert.equal(wholePieces(60.004), 60);
   assert.equal(wholePieces(20.75), 21);
+});
+
+test('ціль у штуках для кожного виробу: решта зміни — лише на нього', () => {
+  const shift = { start: '06:30', end: '19:30', brk: 75 }; // 705 хв
+  // один виріб: ціль = норма на день, і не змінюється від уже зробленого
+  const one = computeDay({ ...shift, products: [{ norm: 85, qty: 40 }] }, 420);
+  assert.equal(piecesToGoal(one, one.lines[0], 100, 420), 143); // 142,68
+  // два вироби, ще нічого не внесено: кожен — на всю зміну
+  const two = computeDay({ ...shift, products: [{ norm: 58, qty: '' }, { norm: 58, qty: '' }] }, 420);
+  assert.deepEqual(two.lines.map((l) => piecesToGoal(two, l, 100, 420)), [98, 98]); // 97,36
+  // внесли 50 шт першого — другому лишилось (705 − 50·420/58) · 58/420 = 47,36 → 48
+  const part = computeDay({ ...shift, products: [{ norm: 58, qty: 50 }, { norm: 58, qty: '' }] }, 420);
+  assert.equal(piecesToGoal(part, part.lines[1], 100, 420), 48);
+  // інші роботи теж зменшують ціль: 2 год → (705 − 120) · 85/420 = 118,4 → 119
+  const other = computeDay({ ...shift, products: [{ norm: 85, qty: '' }], others: [{ kind: 'Прибирання', min: 120 }] }, 420);
+  assert.equal(piecesToGoal(other, other.lines[0], 100, 420), 119);
+  // без норми — цілі немає
+  const none = computeDay({ ...shift, products: [{ norm: '', qty: '' }] }, 420);
+  assert.equal(piecesToGoal(none, none.lines[0], 100, 420), null);
 });
 
 test('приклад історії: лише будні, не чіпає справжні дні, позначений', () => {

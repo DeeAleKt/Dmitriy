@@ -22,6 +22,7 @@ import {
   OTHER_MINUTES,
   paceAt,
   pctText,
+  piecesToGoal,
   rankInMonth,
   sameRecord,
   shiftLength,
@@ -780,9 +781,10 @@ function DayContext({ days, date, record, res, goal, isToday }) {
 function ProductItem({ p, idx, line, res, base, goal, onChange, onRemove, onPick, onFix }) {
   const norm = num(p.norm);
   // кілька виробів (чи ще інші роботи) — частка кожного у відсотку дня; разом вони дають загальний відсоток
-  const share = res.valid && norm > 0 && line && (res.active.length > 1 || res.otherMin > 0) ? (line.minutes / res.avail) * 100 : null;
-  // один виріб — одразу після норми видно, скільки штук треба на всю зміну
-  const target = res.valid && norm > 0 && line && share == null ? wholePieces((line.dayNorm * goal) / 100) : null;
+  const multi = res.active.length > 1 || res.otherMin > 0;
+  const share = res.valid && multi && norm > 0 && line?.minutes > 0 ? (line.minutes / res.avail) * 100 : null;
+  // одразу після норми видно, скільки штук треба на всю зміну — сірим у порожньому «Зроблено»
+  const target = norm > 0 ? piecesToGoal(res, line, goal, base) : null;
   const focusNorm = () => setTimeout(() => document.querySelector(`[data-pkey="${p.key}"] .numbox input`)?.focus(), 30);
   return (
     <div class="pitem" data-pkey={p.key}>
@@ -792,7 +794,7 @@ function ProductItem({ p, idx, line, res, base, goal, onChange, onRemove, onPick
           <Icon name="down" size={16} class="faint" />
         </button>
         {share != null && <span class="p-share">{pctText(share, 0)}% дня</span>}
-        {target != null && (
+        {!multi && target != null && (
           <span class="p-share">
             {goal}% — {p.approx ? '≈' : ''}
             {target} шт

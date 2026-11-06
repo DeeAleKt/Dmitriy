@@ -177,6 +177,17 @@ export function toGoal(res, goal, base = 420) {
 export const wholePieces = (x) => (Math.abs(x - Math.round(x)) < 0.01 ? Math.round(x) : Math.ceil(x));
 
 /**
+ * Скільки штук цього виробу треба на всю зміну до мети, якщо решту робити лише його:
+ * (доступний час × мета − зароблене іншими виробами й роботами) у штуках цього виробу.
+ * Один виріб — це просто норма на день; кілька — ціль кожного зменшується, коли вносять інші.
+ */
+export function piecesToGoal(res, line, goal, base = 420) {
+  if (!res.valid || !line || !(line.norm > 0)) return null;
+  const rest = Math.max(0, (res.avail * goal) / 100 - (res.earned - line.minutes));
+  return wholePieces((rest * line.norm) / base);
+}
+
+/**
  * Темп усередині зміни за годинником: скільки мало бути зароблено зараз
  * і який відсоток вийде на кінець зміни, якщо триматися того ж темпу.
  */
