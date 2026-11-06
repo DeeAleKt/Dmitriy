@@ -1,7 +1,7 @@
 // Памʼять браузера (localStorage): миттєвий кеш і запасне сховище.
 // В акаунті дані лежать на сервері — див. cloud.js; тут лише копія для швидкого запуску й роботи без мережі.
 // Кожен акаунт має власні ключі (norma.v2.u.<id>.*), щоб на спільному телефоні дані різних людей не змішались.
-import { DEFAULT_SETTINGS, DEFAULT_SHIFTS, isBlank, newKey, normalizeSettings, num, shiftLength } from './model.js';
+import { DEFAULT_SETTINGS, DEFAULT_SHIFTS, isBlank, newKey, normalizeSettings, num, SETTINGS_V, shiftLength } from './model.js';
 
 const LEGACY = 'norma.v2.';
 let prefix = LEGACY;
@@ -169,12 +169,13 @@ export function loadAll(todayISO) {
       migrated = true;
     }
   }
+  const regraph = !(num(settings?.v) >= SETTINGS_V); // зміни в налаштуваннях щойно замінено новим графіком
   settings = normalizeSettings(settings);
   let days = read(K.days, {});
   if (!days || typeof days !== 'object' || Array.isArray(days)) days = {};
   if (!validDraft(draft)) draft = days[todayISO] ? draftFromRecord(days[todayISO]) : newDraft(todayISO, settings, days);
-  else if (!days[draft.date] && isBlank(draft) && !settings.shifts.some((s) => s.name === draft.shiftName)) {
-    // графік змінився, а в порожній чернетці лишилась стара зміна
+  else if (!days[draft.date] && isBlank(draft) && (regraph || !settings.shifts.some((s) => s.name === draft.shiftName))) {
+    // графік змінився, а в порожній чернетці лишились старі час і перерва
     const s = mainShift(settings);
     draft = { ...draft, shiftName: s.name, start: s.start, end: s.end, brk: s.brk };
   }

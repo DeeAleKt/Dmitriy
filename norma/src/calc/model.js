@@ -10,11 +10,12 @@ import { addDays, fmt, fmtMin, fromISO, monthRange, pad, plural, toISO, weekRang
 
 export { parseNum as num, shiftLength, toMinutes };
 
-// З листопада 2026 зміна одна для всіх: 6:30–19:30, перерва 1 год → 12 год роботи.
-export const DEFAULT_SHIFTS = [{ id: 's1', name: 'Основна зміна', start: '06:30', end: '19:30', brk: 60 }];
+// З листопада 2026 зміна одна для всіх: 6:30–19:30, перерва 1 год 15 хв → 11 год 45 хв роботи.
+export const DEFAULT_SHIFTS = [{ id: 's1', name: 'Основна зміна', start: '06:30', end: '19:30', brk: 75 }];
 
-// Версія налаштувань: до 3-ї в них лежали старі зміни (1 зміна, 2 зміна…) — їх замінює нова.
-const SETTINGS_V = 3;
+// Версія налаштувань: до 3-ї в них лежали старі зміни (1 зміна, 2 зміна…), у 3-й — перерва 1 год;
+// у старіших за поточну зміни замінює нова.
+export const SETTINGS_V = 4;
 
 export const DEFAULT_DOWN = [
   'Немає матеріалу',
