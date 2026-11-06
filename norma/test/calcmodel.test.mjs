@@ -16,6 +16,7 @@ import {
   summarize,
   toGoal,
   toRecord,
+  wholePieces,
 } from '../src/calc/model.js';
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
@@ -190,6 +191,20 @@ test('налаштування: старі зміни замінює одна 6:
   assert.equal(c.workMin, 705);
   close(c.lines[0].dayNorm, 58.75);
   close(c.pct, 80);
+});
+
+test('ціль на зміну видно одразу після норми: штуки цілими з запасом', () => {
+  // норма 35 на 7 год, зміна 11 год 45 хв, ще нічого не зроблено → 58,75 шт → треба 59
+  const empty = computeDay({ start: '06:30', end: '19:30', brk: 75, products: [{ norm: 35, qty: '' }] }, 420);
+  assert.equal(empty.hasInput, false);
+  close(toGoal(empty, 100).pieces, 58.75);
+  assert.equal(wholePieces(toGoal(empty, 100).pieces), 59);
+  assert.equal(wholePieces(toGoal(empty, 105).pieces), 62); // 61,69
+  assert.equal(computeDay({ start: '06:30', end: '19:30', brk: 75, products: [{ norm: 35, qty: 58 }] }, 420).pct < 100, true);
+  // ціле лишається цілим, навіть із похибкою дробів
+  assert.equal(wholePieces(60), 60);
+  assert.equal(wholePieces(60.004), 60);
+  assert.equal(wholePieces(20.75), 21);
 });
 
 test('приклад історії: лише будні, не чіпає справжні дні, позначений', () => {

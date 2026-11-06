@@ -173,6 +173,9 @@ export function toGoal(res, goal, base = 420) {
   return { minutes, pieces: single ? (minutes * single.norm) / base : null, single };
 }
 
+/** Штуки до мети — цілими і з запасом: 58,75 → 59 (58 не дотягне до 100 %), 60,004 → 60. */
+export const wholePieces = (x) => (Math.abs(x - Math.round(x)) < 0.01 ? Math.round(x) : Math.ceil(x));
+
 /**
  * Темп усередині зміни за годинником: скільки мало бути зароблено зараз
  * і який відсоток вийде на кінець зміни, якщо триматися того ж темпу.

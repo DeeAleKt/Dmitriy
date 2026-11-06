@@ -28,6 +28,7 @@ import {
   streak,
   toGoal,
   toRecord,
+  wholePieces,
 } from './model.js';
 import { ask, CardHead, cleanNum, Icon, Sheet, Stepper, toast, Toggle, useTween } from './ui.jsx';
 
@@ -84,9 +85,13 @@ function statusOf(res, goal, base) {
   if (res.error === 'break') return { icon: 'info', text: 'Перерва довша за зміну' };
   if (res.error === 'downtime') return { icon: 'pause', text: 'Простій забрав увесь час' };
   if (!res.active.length && !res.otherMin) return { icon: 'box', text: 'Впишіть норму виробу' };
-  if (!res.hasInput) return { icon: 'box', text: 'Скільки зроблено?' };
-  if (res.error === 'other') return { icon: 'info', text: 'Інших робіт більше, ніж робочого часу' };
   const g = toGoal(res, goal, base);
+  if (!res.hasInput) {
+    // норму вписали, а кількості ще немає — одразу скільки штук треба на всю зміну
+    if (g.pieces == null) return { icon: 'box', text: 'Скільки зроблено?' };
+    return { icon: 'target', text: `Для ${goal}% треба ${g.single.approx ? '≈' : ''}${wholePieces(g.pieces)} шт за зміну` };
+  }
+  if (res.error === 'other') return { icon: 'info', text: 'Інших робіт більше, ніж робочого часу' };
   const word = goal === 100 ? 'норми' : `мети ${goal}%`;
   if (g.minutes <= 0.01) {
     let extra = 0;
@@ -94,7 +99,7 @@ function statusOf(res, goal, base) {
     if (goal !== 100) return { icon: 'sparkle', done: true, text: `Мету ${goal}% досягнуто` };
     return { icon: 'sparkle', done: true, text: extra >= 0.05 ? `Норму виконано · +${fmt(extra)} шт понад` : 'Норму виконано' };
   }
-  if (g.pieces != null) return { icon: 'target', text: `До ${word} ще ${fmt(g.pieces)} шт` };
+  if (g.pieces != null) return { icon: 'target', text: `До ${word} ще ${wholePieces(g.pieces)} шт` };
   return { icon: 'target', text: `До ${word} ще ${fmtMin(g.minutes)} роботи` };
 }
 
@@ -260,6 +265,7 @@ export function Today() {
             line={res.lines[i]}
             res={res}
             base={base}
+            goal={goal}
             onChange={(x) => setProduct(p.key, x)}
             onRemove={() => removeProduct(p)}
             onPick={() => setSheet({ type: 'product', key: p.key })}
@@ -404,7 +410,7 @@ function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday,
   const shown = useTween(has ? res.pct : 0);
   const single = res.valid && res.active.length === 1 && res.otherMin === 0 ? res.active[0] : null;
   let sub = null;
-  if (single) sub = `Норма на ${isToday ? 'сьогодні' : 'день'}: ${fmt(single.dayNorm)} шт`;
+  if (single) sub = `Норма на ${isToday ? 'сьогодні' : 'день'}: ${fmt(single.dayNorm, 2)} шт`;
   else if (has) sub = `Нормо-час ${fmtHM(res.earned)} з ${fmtHM(res.avail)}`;
   return (
     <section class={`result lv-${lv}`} ref={boxRef}>
@@ -771,10 +777,12 @@ function DayContext({ days, date, record, res, goal, isToday }) {
 
 // ---------- Виріб ----------
 
-function ProductItem({ p, idx, line, res, base, onChange, onRemove, onPick, onFix }) {
+function ProductItem({ p, idx, line, res, base, goal, onChange, onRemove, onPick, onFix }) {
   const norm = num(p.norm);
   // кілька виробів (чи ще інші роботи) — частка кожного у відсотку дня; разом вони дають загальний відсоток
   const share = res.valid && norm > 0 && line && (res.active.length > 1 || res.otherMin > 0) ? (line.minutes / res.avail) * 100 : null;
+  // один виріб — одразу після норми видно, скільки штук треба на всю зміну
+  const target = res.valid && norm > 0 && line && share == null ? wholePieces((line.dayNorm * goal) / 100) : null;
   const focusNorm = () => setTimeout(() => document.querySelector(`[data-pkey="${p.key}"] .numbox input`)?.focus(), 30);
   return (
     <div class="pitem" data-pkey={p.key}>
@@ -784,6 +792,12 @@ function ProductItem({ p, idx, line, res, base, onChange, onRemove, onPick, onFi
           <Icon name="down" size={16} class="faint" />
         </button>
         {share != null && <span class="p-share">{pctText(share, 0)}% дня</span>}
+        {target != null && (
+          <span class="p-share">
+            {goal}% — {p.approx ? '≈' : ''}
+            {target} шт
+          </span>
+        )}
         <button class="icon-btn" onClick={onRemove} aria-label="Прибрати виріб">
           <Icon name="x" size={18} />
         </button>
