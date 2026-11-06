@@ -1,18 +1,26 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { computeDay, level, normalizeSettings } from '../src/calc/model.js';
-import { moodOf, QUIPS, quip } from '../src/calc/vibe.js';
+import { CHEERS, moodOf, QUIPS, quip } from '../src/calc/vibe.js';
 
 const day = (qty, norm = 35) => computeDay({ start: '06:30', end: '19:30', brk: 75, products: [{ norm, qty }] }, 420);
 
-test('жарти: без вписаних — нічого не показується; вписані — стійкі для тих самих умов', () => {
-  for (const kind of Object.keys(QUIPS)) assert.equal(quip(kind, 'x'), null, kind);
+test('залицяння: для кожного стану є, стійкі для тих самих умов, змінюються з часом', () => {
+  for (const [kind, list] of Object.entries(QUIPS)) {
+    assert.ok(list.length >= 3, kind);
+    assert.ok(list.every((x) => typeof x === 'string' && x.length > 10 && x.length < 90), kind);
+    assert.ok(list.includes(quip(kind, 'x')), kind);
+  }
+  assert.equal(quip('good', '2026-11-06|1'), quip('good', '2026-11-06|1'));
+  const seen = new Set(Array.from({ length: 30 }, (_, i) => quip('good', `2026-11-06|${i}`)));
+  assert.ok(seen.size >= 3);
   assert.equal(quip('нема-такого', 'x'), null);
-  const mine = { good: ['А', 'Б', 'В', 'Г'] };
-  assert.equal(quip('good', '2026-11-06|1', mine), quip('good', '2026-11-06|1', mine));
-  const seen = new Set(Array.from({ length: 30 }, (_, i) => quip('good', `2026-11-06|${i}`, mine)));
-  assert.ok(seen.size >= 3); // з часом змінюються
-  assert.equal(quip('bad', 'x', mine), null); // для інших станів — нічого
+  // свій список: порожній стан — нічого
+  assert.equal(quip('bad', 'x', { good: ['А'] }), null);
+  assert.equal(quip('good', 'x', { good: ['А'] }), 'А');
+  // сповіщення підставляють числа
+  assert.ok(CHEERS.record('112,5').includes('112,5%'));
+  assert.ok(CHEERS.streak('3 дні').startsWith('3 дні'));
 });
 
 test('настрій дня — з тих самих даних, що й відсоток', () => {

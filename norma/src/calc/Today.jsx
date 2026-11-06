@@ -32,7 +32,7 @@ import {
   wholePieces,
 } from './model.js';
 import { ask, CardHead, cleanNum, Icon, Sheet, Stepper, toast, Toggle, useTween } from './ui.jsx';
-import { moodOf, PRIDE_COLORS, quip } from './vibe.js';
+import { CHEERS, moodOf, PRIDE_COLORS, quip } from './vibe.js';
 
 const WEEKDAYS = ['неділя', 'понеділок', 'вівторок', 'середа', 'четвер', 'пʼятниця', 'субота'];
 const MONTHS_GEN = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
@@ -125,7 +125,7 @@ export function Today() {
   const approx = isApprox(record);
   const pride = settings.pride;
   const [sheet, setSheet] = useState(null);
-  // жарт під відсотком — лише якщо власник вписав свої у vibe.js; той самий, поки не змінився стан, сам — раз на 10 хв або дотиком
+  // залицяння під відсотком (vibe.js): те саме, поки не змінився стан дня; саме — раз на 10 хв або дотиком
   const [spin, setSpin] = useState(0);
   const mood = moodOf(res, lv, { odd, after: isToday && pace?.state === 'after' });
   const joke = pride ? quip(mood, `${draft.date}|${Math.floor(now / 6e5)}|${spin}`) : null;
@@ -143,14 +143,16 @@ export function Today() {
     const key = draft.date;
     if (best && was.pct <= best.pct && res.pct > best.pct + 0.05 && !fired.current.has(`${key}:best`)) {
       fired.current.add(`${key}:best`).add(`${key}:goal`);
-      toast(`Новий особистий рекорд — ${fmt(res.pct, 1)}%!`, 'ok', 'trophy');
+      toast(pride ? CHEERS.record(fmt(res.pct, 1)) : `Новий особистий рекорд — ${fmt(res.pct, 1)}%!`, 'ok', 'trophy');
       if (settings.celebrate) confetti({ y: 0.22, count: 170, colors: pride ? PRIDE_COLORS : undefined });
       buzz(30);
     } else if (was.pct < goal - 0.05 && res.pct >= goal - 0.05 && !fired.current.has(`${key}:goal`)) {
       fired.current.add(`${key}:goal`);
       const run = streak({ ...others, [key]: record }, goal).cur;
       const done = goal === 100 ? 'Норму виконано' : `Мету ${goal}% досягнуто`;
-      toast(run >= 2 ? `${done} · ${run} ${plural(run, ['день', 'дні', 'днів'])} поспіль` : `${done}!`, 'ok', run >= 2 ? 'flame' : 'sparkle');
+      const days = `${run} ${plural(run, ['день', 'дні', 'днів'])}`;
+      const plain = run >= 2 ? `${done} · ${days} поспіль` : `${done}!`;
+      toast(pride ? (run >= 2 ? CHEERS.streak(days) : goal === 100 ? CHEERS.goal : plain) : plain, 'ok', run >= 2 ? 'flame' : 'sparkle');
       if (settings.celebrate) confetti({ y: 0.22, count: 110, colors: pride ? PRIDE_COLORS : undefined });
       buzz(25);
     }
