@@ -4229,3 +4229,165 @@ input::placeholder {
 :root[data-pride] .hrow:nth-child(6n) {
   --c: #750787;
 }
+
+/* ---------- Прайд-шкала: веселка-дуга з єдинорогом (Rainbow.jsx) ---------- */
+.result.with-rg {
+  position: relative;
+}
+.r-corner {
+  position: absolute;
+  top: 12px;
+  z-index: 2;
+}
+.r-corner.l {
+  left: 12px;
+}
+.r-corner.r {
+  right: 12px;
+}
+.result.with-rg .r-status {
+  justify-content: center;
+  text-align: center;
+}
+.result.with-rg .r-sub {
+  text-align: center;
+}
+.rg {
+  position: relative;
+  margin: 4px -4px 0;
+}
+.rg svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.rg-track {
+  opacity: 0.2;
+}
+.rg-fill {
+  filter: drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.35));
+}
+.rg-cloud {
+  fill: #ffffff;
+  filter: drop-shadow(0 3px 5px rgba(10, 5, 30, 0.35));
+}
+.rg-star {
+  fill: #ffffff;
+  filter: drop-shadow(0 0 4px #ff6fd8);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: rg-twinkle 1.6s ease-in-out infinite;
+}
+:root[data-pride] .rg .rg-num {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5%;
+  justify-content: center;
+  font-size: clamp(30px, 9.6vw, 40px);
+}
+.uni-white,
+.uni-leg rect {
+  fill: #ffffff;
+  stroke: #e3d4ff;
+  stroke-width: 0.8;
+}
+.uni-tail path {
+  fill: none;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+}
+.uni-sparks path {
+  fill: #fff6a8;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.uni-bob {
+  animation: uni-bob 1.8s ease-in-out infinite alternate;
+}
+.uni-leg,
+.uni-tail {
+  transform-box: fill-box;
+}
+.uni-leg {
+  transform-origin: 50% 0;
+}
+.uni-tail {
+  transform-origin: 100% 0;
+  animation: uni-tail 2.4s ease-in-out infinite alternate;
+}
+/* галоп, поки є що рахувати */
+.rg.go .uni-bob {
+  animation-duration: 0.42s;
+}
+.rg.go .uni-leg {
+  animation: uni-leg 0.42s ease-in-out infinite alternate;
+}
+.rg.go .uni-leg.back {
+  animation-delay: -0.21s;
+}
+.rg.go .uni-tail {
+  animation-duration: 0.42s;
+}
+.rg.go .uni-sparks path {
+  animation: rg-twinkle 1.2s ease-in-out infinite;
+}
+.rg.go .uni-sparks path:nth-child(2) {
+  animation-delay: 0.4s;
+}
+.rg.go .uni-sparks path:nth-child(3) {
+  animation-delay: 0.8s;
+}
+/* норму виконано — стрибає від радості */
+.rg.over .uni-bob {
+  animation: uni-jump 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) infinite;
+}
+.rg.over .uni-leg {
+  animation-duration: 0.22s;
+}
+@keyframes uni-bob {
+  to {
+    transform: translateY(-1.8px);
+  }
+}
+@keyframes uni-leg {
+  from {
+    transform: rotate(20deg);
+  }
+  to {
+    transform: rotate(-20deg);
+  }
+}
+@keyframes uni-tail {
+  from {
+    transform: rotate(10deg);
+  }
+  to {
+    transform: rotate(-12deg);
+  }
+}
+@keyframes uni-jump {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-11px) rotate(-7deg);
+  }
+  60% {
+    transform: translateY(-11px) rotate(5deg);
+  }
+}
+@keyframes rg-twinkle {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}

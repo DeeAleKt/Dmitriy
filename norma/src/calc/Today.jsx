@@ -5,6 +5,7 @@ import { backup, BACKUP_KEY } from './files.js';
 import { buzz, confetti, PRIDE_COLORS } from './fx.js';
 import { MonthCard, MonthGoalSheet } from './Month.jsx';
 import { NormFixSheet } from './Norms.jsx';
+import { RainbowGauge } from './Rainbow.jsx';
 import {
   bestDay,
   compareDay,
@@ -253,6 +254,7 @@ export function Today() {
         save={blank && !saved ? null : <SaveChip sync={sync} dirty={dirty} invalid={!blank && !res.valid} onClick={() => setSheet({ type: 'sync' })} />}
         onHow={() => setSheet({ type: 'how' })}
         onCheck={checkOdd}
+        pride={pride}
       />
       <MiniBar show={mini} res={res} goal={goal} lv={lv} status={status} approx={approx} />
 
@@ -407,7 +409,7 @@ export function Today() {
 // ---------- Результат ----------
 
 /** Відсоток, що робити далі, смуга до норми і темп — усе, заради чого відкривають калькулятор. */
-function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday, save, onHow, onCheck }) {
+function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday, save, onHow, onCheck, pride }) {
   const has = res.hasInput && res.valid;
   const shown = useTween(has ? res.pct : 0);
   const single = res.valid && res.active.length === 1 && res.otherMin === 0 ? res.active[0] : null;
@@ -415,26 +417,37 @@ function ResultCard({ boxRef, res, goal, lv, status, pace, odd, approx, isToday,
   if (single) sub = `Норма на ${isToday ? 'сьогодні' : 'день'}: ${fmt(single.dayNorm, 2)} шт`;
   else if (has) sub = `Нормо-час ${fmtHM(res.earned)} з ${fmtHM(res.avail)}`;
   return (
-    <section class={`result lv-${lv}`} ref={boxRef}>
-      <div class="r-top">
-        <button class="r-num" onClick={onHow} disabled={!res.valid} aria-label={`Виконання ${pctText(has ? res.pct : 0)}%. Як пораховано`}>
-          {approx && <i>≈</i>}
-          {pctText(shown, 1)}
-          <small>%</small>
-        </button>
-        <div class="r-tools">
-          {save}
-          <button class="r-ico" onClick={onHow} disabled={!res.valid} aria-label="Як пораховано">
+    <section class={`result lv-${lv} ${pride ? 'with-rg' : ''}`} ref={boxRef}>
+      {pride ? (
+        // прайд-режим: шкала — веселка з єдинорогом, відсоток усередині дуги, кнопки — по кутах
+        <>
+          <div class="r-corner l">{save}</div>
+          <button class="r-ico r-corner r" onClick={onHow} disabled={!res.valid} aria-label="Як пораховано">
             <Icon name="info" size={18} />
           </button>
+          <RainbowGauge pct={res.pct} goal={goal} has={has} pace={pace} approx={approx} onHow={onHow} disabled={!res.valid} />
+        </>
+      ) : (
+        <div class="r-top">
+          <button class="r-num" onClick={onHow} disabled={!res.valid} aria-label={`Виконання ${pctText(has ? res.pct : 0)}%. Як пораховано`}>
+            {approx && <i>≈</i>}
+            {pctText(shown, 1)}
+            <small>%</small>
+          </button>
+          <div class="r-tools">
+            {save}
+            <button class="r-ico" onClick={onHow} disabled={!res.valid} aria-label="Як пораховано">
+              <Icon name="info" size={18} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
       <p class={`r-status ${status.done ? 'done' : ''}`}>
         <Icon name={status.icon} size={18} />
         <span>{status.text}</span>
       </p>
       {sub && <p class="r-sub">{sub}</p>}
-      <ProgressBar res={res} goal={goal} pace={pace} />
+      {!pride && <ProgressBar res={res} goal={goal} pace={pace} />}
       <PaceLine pace={pace} res={res} />
       {odd && (
         <div class="r-odd">
