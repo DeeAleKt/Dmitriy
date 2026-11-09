@@ -49,6 +49,9 @@ async function handle(req) {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  const url = new URL(req.url);
+  // службові адреси Firebase (/__/auth/handler, /__/auth/iframe — вхід через Google) — лише з мережі, як є:
+  // заголовка X-Norma вони не мають, і без цього рядка замість обробника входу відкривалась копія застосунку
+  if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/__/')) return;
   e.respondWith(handle(req));
 });
