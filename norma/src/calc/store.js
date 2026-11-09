@@ -178,6 +178,11 @@ export function loadAll(todayISO) {
     // графік змінився, а в порожній чернетці лишились старі час і перерва
     const s = mainShift(settings);
     draft = { ...draft, shiftName: s.name, start: s.start, end: s.end, brk: s.brk };
+  } else if (regraph && draft.date === todayISO) {
+    // день уже почали вносити, а в графіку змінилась перерва — сьогоднішній день рахуємо за новою
+    // (лише якщо вхід і вихід — як у графіку; збережеться сам при першому ж записі)
+    const s = mainShift(settings, draft.shiftName);
+    if (s.name === draft.shiftName && s.start === draft.start && s.end === draft.end && num(draft.brk) !== s.brk) draft = { ...draft, brk: s.brk };
   }
   if (migrated) {
     saveSettings(settings);
